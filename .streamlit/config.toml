@@ -1,4 +1,21 @@
 # AIRA OS - look and feel. This file contains no secrets and is safe on GitHub.
+# One warm, light theme on every device, whatever the phone or laptop setting.
+
+[theme]
+base = "light"
+primaryColor = "#55735C"
+backgroundColor = "#FBF8F1"
+secondaryBackgroundColor = "#F3EEE3"
+textColor = "#2C2A26"
+borderColor = "#E6DFD0"
+font = "sans serif"
+baseRadius = "medium"
+
+[client]
+toolbarMode = "minimal"
+
+[browser]
+gatherUsageStats = false# AIRA OS - look and feel. This file contains no secrets and is safe on GitHub.
 # The app follows your device's light or dark setting.
 
 [theme]
