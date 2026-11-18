@@ -10,7 +10,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from aira import importer, planning, timeutil  # noqa: E402
+from aira import importer, literature, planning, timeutil  # noqa: E402
 
 TODAY = date(2026, 11, 17)  # a Tuesday
 
@@ -189,6 +189,48 @@ class ImporterTests(unittest.TestCase):
         files = {"opportunities.csv": b"title,deadline\nSome conference,2027-03-01\n"}
         _, problems = importer.parse_files(files, TODAY)
         self.assertEqual(len(problems), 1)
+
+
+
+class LiteratureTests(unittest.TestCase):
+    def test_doi_is_cleaned(self):
+        self.assertEqual(literature.normalize_doi("https://doi.org/10.1016/J.CMI.2014.11.015"), "10.1016/j.cmi.2014.11.015")
+        self.assertEqual(literature.normalize_doi("doi: 10.1/ABC."), "10.1/abc")
+        self.assertIsNone(literature.normalize_doi("not a doi"))
+        self.assertIsNone(literature.normalize_doi(None))
+
+    def test_duplicate_key_prefers_doi_then_eid_then_title(self):
+        self.assertEqual(literature.source_key("https://doi.org/10.1/X", "2-s2.0-1", "T", 2020), "doi:10.1/x")
+        self.assertEqual(literature.source_key(None, "2-s2.0-1", "T", 2020), "eid:2-s2.0-1")
+        self.assertEqual(
+            literature.source_key(None, None, "How Schools Do Policy!", 2012),
+            literature.source_key(None, None, "how schools do policy", 2012),
+        )
+
+    def test_matrix_rows_import_as_literature_and_dedupe_by_doi(self):
+        csv = (
+            b"title,doi,year\n"
+            b"Paper A,https://doi.org/10.1/A,2020\n"
+            b"Paper A again,10.1/a,2020\n"
+        )
+        rows, problems = importer.parse_files({"literature_sources.csv": csv}, TODAY)
+        self.assertEqual(rows["literature_sources"][0]["import_key"], "doi:10.1/a")
+        self.assertEqual(len(problems), 1)  # the second row repeats the same DOI
+
+    def test_reading_status_is_not_assumed(self):
+        rows, _ = importer.parse_files({"literature_sources.csv": b"title\nPaper\n"}, TODAY)
+        self.assertEqual(rows["literature_sources"][0]["reading_status"], "not_recorded")
+
+    def test_non_matrix_excel_is_rejected_clearly(self):
+        rows, problems = importer.parse_files({"x.xlsx": b"not really excel"}, TODAY)
+        self.assertEqual(rows.get("literature_sources"), [])
+        self.assertTrue(problems)
+
+    def test_papers_processed_counts_only_date_read_this_week(self):
+        read = [{"date_read": "2026-11-16"}, {"date_read": "2026-11-09"}, {"date_read": None}]
+        summary = planning.week_summary([], [], {"papers": 5}, TODAY, read)
+        self.assertEqual((summary["papers_done"], summary["papers_target"]), (1, 5))
+        self.assertIsNone(planning.week_summary([], [], {}, TODAY, [])["papers_done"])
 
 
 if __name__ == "__main__":

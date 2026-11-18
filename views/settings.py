@@ -37,6 +37,7 @@ def _profile_section() -> None:
 TARGET_FIELDS = [
     ("phd_hours", "PhD focused hours per week"),
     ("workouts", "Workouts per week"),
+    ("papers", "Research papers processed per week"),
     ("family_hours", "Personal and family hours per week"),
     ("business_hours_limit", "Business hours per week (your upper limit)"),
 ]

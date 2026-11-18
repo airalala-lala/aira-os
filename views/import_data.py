@@ -81,8 +81,8 @@ def main() -> None:
         return
 
     uploads = st.file_uploader(
-        "Choose all the files from your aira-os-seed-data folder (.json and .csv)",
-        type=["json", "csv"],
+        "Choose the files to import (.json, .csv, or a literature review matrix .xlsx)",
+        type=["json", "csv", "xlsx"],
         accept_multiple_files=True,
     )
 

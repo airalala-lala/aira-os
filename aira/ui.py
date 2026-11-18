@@ -27,6 +27,7 @@ _CSS = """
     --aira-rose: #B9848A;
     --aira-gold: #A98545;
     --aira-track: #ECE5D6;
+    --aira-button: #55735C;
 }
 @media (prefers-color-scheme: dark) {
     :root {
@@ -42,6 +43,7 @@ _CSS = """
         --aira-rose: #D9B0B3;
         --aira-gold: #D1B279;
         --aira-track: #383C36;
+        --aira-button: #6E8F76;
     }
 }
 
@@ -54,6 +56,17 @@ _CSS = """
     padding-top: 3.5rem;
     padding-bottom: 4rem;
 }
+
+/* Main buttons in sage green (overrides the theme colour, which some
+   Streamlit versions ignore in dark mode) */
+[data-testid="stBaseButton-primary"],
+[data-testid="stBaseButton-primaryFormSubmit"] {
+    background-color: var(--aira-button) !important;
+    border-color: var(--aira-button) !important;
+    color: #FFFFFF !important;
+}
+[data-testid="stBaseButton-primary"]:hover,
+[data-testid="stBaseButton-primaryFormSubmit"]:hover { filter: brightness(1.08); }
 
 /* Headings */
 .aira-eyebrow {

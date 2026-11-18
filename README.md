@@ -38,7 +38,7 @@ Use a brand-new project for AIRA OS. Do not reuse a project that holds anything 
 
 ### A2. Create the database tables
 
-There are four SQL files in the `supabase/migrations` folder. Run them **in number order**, one at a time.
+There are five SQL files in the `supabase/migrations` folder. Run them **in number order**, one at a time.
 
 1. In the left sidebar, click **SQL Editor**.
 2. Click **New query** (or the **+** button).
@@ -50,13 +50,14 @@ There are four SQL files in the `supabase/migrations` folder. Run them **in numb
    - `0002_storage.sql`
    - `0003_history_tables.sql`
    - `0004_command_centre.sql`
+   - `0005_phd_hub.sql`
 
-Every file is safe to run more than once, so if you are unsure whether you ran one, run it again.
+Every file is safe to run more than once. If you ever re-run an older file, run the later ones again afterwards too, in order.
 
 ### A3. Check the security rules
 
 1. New query again. Paste the contents of `supabase/verify_security.sql` and click **Run**.
-2. The editor shows the result of the last query. You should see thirteen rows, one per table, each with grantee `authenticated`. There must be **no row with grantee `anon`**.
+2. The editor shows the result of the last query. You should see fifteen rows, one per table, each with grantee `authenticated`. There must be **no row with grantee `anon`**.
 3. Then open **Table Editor** in the left sidebar. None of the tables should show an "RLS disabled" or "Unrestricted" warning.
 
 ### A4. Create your one user account
@@ -189,6 +190,42 @@ After the import, the home page will probably open on the **Restart today** card
 
 The imported records are saved and included in your backup download. The screens for viewing, charting and editing them arrive with each module (PhD Hub in Phase 2, Fitness Studio in Phase 3). Until then you can see and edit them in Supabase under **Table Editor**.
 
+## Part F: PhD Research Hub (Phase 2a)
+
+### F1. Update the database
+
+1. In Supabase, open **SQL Editor**, then **New query**.
+2. Paste the contents of `supabase/migrations/0005_phd_hub.sql` and click **Run**. You should see **Success. No rows returned**.
+
+### F2. Update the app
+
+Upload the whole project to GitHub again, the same way as before: open the repository's front page, **Add file → Upload files**, drag in everything from the unzipped `aira-os` folder (with hidden files showing), and **Commit changes**. Wait about two minutes for Streamlit to update.
+
+### F3. Import your literature matrix
+
+1. Open AIRA OS and click **Import data** in the sidebar.
+2. Click **Browse files** and choose your `Literature_review_matrix.xlsx`.
+3. The preview should show **52 new records** under Literature sources.
+4. Tick the confirmation box and click **Import**.
+
+The Excel file stays on your MacBook. Only its rows go into your private database.
+
+### F4. Test it
+
+| # | Do this | You should see |
+|---|---|---|
+| 1 | Open **PhD Research Hub** | Four tabs: Overview, Literature, Supervision, Timeline. Overview shows 52 sources, 7 open feedback items and 0 of 9 milestones completed |
+| 2 | **Literature** tab: type `Malaysia` in Search | The table shows only matching sources |
+| 3 | Tap a row in the table | That source opens above the table, with a note saying where its summaries came from |
+| 4 | Tap **Mark as read today** | On Home, "Research papers processed" shows 1 recorded |
+| 5 | Open **Edit this source**, write something in **My critical notes**, add a tag, **Save changes** | Your note appears under "My thinking", separate from the source's findings |
+| 6 | **Add a source** with the same DOI as one you have | "This looks like a source you already have" |
+| 7 | **Supervision** tab: tick one feedback item | It stays ticked after a refresh |
+| 8 | **Record a meeting**, then add an action item with a deadline | The action item also appears as a PhD task on Home |
+| 9 | **Timeline** tab: give one milestone a planned date and **Save** | A chart appears with that milestone |
+| 10 | Enter your semester dates and **Save semester dates** | Shaded semester bands appear on the chart |
+| 11 | In **Settings**, set **Research papers processed per week** | Home shows papers against your target |
+
 ### Add it to your iPhone Home Screen
 
 In Safari, open the app, tap the **Share** button, then **Add to Home Screen**. It then opens like an app. Let Safari save your password so signing in is one tap.
@@ -202,8 +239,8 @@ In Safari, open the app, tap the **Share** button, then **Add to Home Screen**. 
 | "AIRA OS is not configured yet. Missing settings: …" | The Secrets box is empty or a name is misspelt | Streamlit app **Settings → Secrets**. Paste the three lines again, check the names exactly, **Save** |
 | "The key you provided is a SECRET / service_role key" | The wrong key was pasted | Replace it with the `sb_publishable_` key. Then in Supabase, delete that secret key and create a new one, since it has been pasted somewhere it should not be |
 | "That email or password is not correct" with the right password | `ALLOWED_EMAIL` does not match the Supabase user's email | Make them identical, including spelling |
-| "A database table is missing" | A migration was not run | Repeat step A2. All four files are needed, in number order |
-| "The database refused this request (permission denied)" | A migration only partly ran | Run all four files again in order; it is safe to repeat |
+| "A database table is missing" | A migration was not run | Repeat step A2. All five files are needed, in number order |
+| "The database refused this request (permission denied)" | A migration only partly ran | Run all five files again in order; it is safe to repeat |
 | No bar of buttons at the bottom on iPhone | The phone layout needs adjusting | Use the **>** arrow at the top left to open the menu, and send me a screenshot |
 | A timer was left running overnight | You forgot to stop it | The banner asks for the minutes you actually worked, or click **Discard this timer** |
 | "Could not reach the database" or "Could not reach Supabase" | The Supabase project is paused after a quiet week, or there is no internet | Supabase dashboard → your project → **Resume project** |

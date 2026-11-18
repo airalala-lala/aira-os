@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from datetime import date
 
+from aira import literature
 from aira.planning import AREAS, PRIORITIES, TIME_CATEGORIES
 from aira.supabase_client import get_client
 from aira.timeutil import parse_date, today_kl, utc_now_iso
@@ -44,6 +45,8 @@ def _explain(exc: Exception) -> str:
             "supabase/migrations/ in number order in the Supabase SQL Editor "
             "(0001, 0002, 0003, then 0004). All four are needed."
         )
+    if (code == "23505" or "duplicate key" in lowered) and "literature" in lowered:
+        return "This source is already in your literature database (same DOI, Scopus ID, or title and year)."
     if code == "23505" or "duplicate key" in lowered:
         return (
             "The database refused a duplicate record. Nothing was overwritten. "
@@ -126,11 +129,13 @@ def _clean_task_fields(
 
 def add_task(
     title: str, module: str, due_date: date | None = None, notes: str = "",
-    priority: str = "normal", pin_today: bool = False,
+    priority: str = "normal", pin_today: bool = False, meeting_id: str | None = None,
 ) -> None:
     payload = _clean_task_fields(title, module, due_date, notes, "todo", priority)
     if pin_today:
         payload["top3_date"] = today_kl().isoformat()
+    if meeting_id:
+        payload["meeting_id"] = meeting_id
     # user_id is filled in by the database itself from the signed-in user.
     _run(get_client().table("tasks").insert(payload))
 
@@ -297,12 +302,199 @@ def delete_workout(workout_id: str) -> None:
     _run(get_client().table("workouts").delete().eq("id", workout_id))
 
 
+# --------------------------------------------------------------- literature
+
+LITERATURE_TEXT_FIELDS = [
+    "authors", "publication_date", "url", "journal", "research_country", "methodology",
+    "theoretical_framework", "key_findings", "conclusions", "limitations", "relevance",
+    "gap_contribution", "critical_notes", "tags", "citation", "abstract",
+]
+
+
+def list_sources() -> list[dict]:
+    rows = _run(get_client().table("literature_sources").select("*"))
+    return sorted(rows, key=lambda r: (-(r.get("year") or 0), (r.get("title") or "").lower()))
+
+
+def sources_read_since(since: date) -> list[dict]:
+    return _run(
+        get_client().table("literature_sources").select("id,date_read")
+        .gte("date_read", since.isoformat())
+    )
+
+
+def _clean_source(fields: dict) -> dict:
+    title = (fields.get("title") or "").strip()
+    if not title:
+        raise DataError("Please give the source a title.")
+    year = fields.get("year")
+    if year is not None and not 1800 <= int(year) <= today_kl().year + 1:
+        raise DataError("Please check the year.")
+    status = fields.get("reading_status") or "not_recorded"
+    if status not in literature.READING_STATUSES:
+        raise DataError("Unknown reading status.")
+    source_type = fields.get("source_type") or None
+    if source_type is not None and source_type not in literature.SOURCE_TYPES:
+        raise DataError("Unknown source type.")
+    date_read = fields.get("date_read")
+    if date_read and date_read > today_kl():
+        raise DataError("The date read cannot be in the future.")
+    doi = literature.normalize_doi(fields.get("doi"))
+    if fields.get("doi") and not doi:
+        raise DataError("That DOI does not look right. It should start with 10.")
+    payload = {
+        "title": title,
+        "year": int(year) if year is not None else None,
+        "doi": doi,
+        "source_type": source_type,
+        "reading_status": status,
+        "date_read": date_read.isoformat() if date_read else None,
+    }
+    for name in LITERATURE_TEXT_FIELDS:
+        value = fields.get(name)
+        payload[name] = (str(value).strip() or None) if value is not None else None
+    if doi and not payload["url"]:
+        payload["url"] = f"https://doi.org/{doi}"
+    return payload
+
+
+def find_duplicate_source(payload: dict, sources: list[dict], ignore_id: str | None = None):
+    """Return an existing source with the same DOI, or the same title and year."""
+    title = literature.normalize_title(payload.get("title"))
+    for source in sources:
+        if source.get("id") == ignore_id:
+            continue
+        if payload.get("doi") and literature.normalize_doi(source.get("doi")) == payload["doi"]:
+            return source
+        if (literature.normalize_title(source.get("title")) == title
+                and (source.get("year") or None) == (payload.get("year") or None)):
+            return source
+    return None
+
+
+def add_source(fields: dict, existing: list[dict]) -> None:
+    payload = _clean_source(fields)
+    duplicate = find_duplicate_source(payload, existing)
+    if duplicate:
+        raise DataError(f"This looks like a source you already have: \"{duplicate['title']}\".")
+    payload["import_key"] = literature.source_key(payload["doi"], None, payload["title"], payload["year"])
+    _run(get_client().table("literature_sources").insert(payload))
+
+
+def update_source(source_id: str, fields: dict, existing: list[dict]) -> None:
+    payload = _clean_source(fields)
+    duplicate = find_duplicate_source(payload, existing, ignore_id=source_id)
+    if duplicate:
+        raise DataError(f"Another source already has this DOI or title and year: \"{duplicate['title']}\".")
+    _run(get_client().table("literature_sources").update(payload).eq("id", source_id))
+
+
+def delete_source(source_id: str) -> None:
+    _run(get_client().table("literature_sources").delete().eq("id", source_id))
+
+
+# ------------------------------------------------------------- supervision
+
+
+def list_meetings() -> list[dict]:
+    rows = _run(get_client().table("supervisor_meetings").select("*"))
+    return sorted(rows, key=lambda r: r.get("meeting_date") or "", reverse=True)
+
+
+def _clean_meeting(meeting_date: date, title: str, feedback: str, decisions: str, notes: str) -> dict:
+    if meeting_date is None:
+        raise DataError("Please enter the meeting date.")
+    if meeting_date > today_kl():
+        raise DataError("A meeting record cannot be in the future. Add a task for an upcoming meeting instead.")
+    clean = lambda v: (v or "").strip() or None
+    return {
+        "meeting_date": meeting_date.isoformat(), "title": clean(title),
+        "feedback": clean(feedback), "decisions": clean(decisions), "notes": clean(notes),
+    }
+
+
+def add_meeting(meeting_date: date, title: str, feedback: str, decisions: str, notes: str) -> None:
+    _run(get_client().table("supervisor_meetings").insert(
+        _clean_meeting(meeting_date, title, feedback, decisions, notes)))
+
+
+def update_meeting(meeting_id: str, meeting_date: date, title: str, feedback: str, decisions: str, notes: str) -> None:
+    _run(get_client().table("supervisor_meetings").update(
+        _clean_meeting(meeting_date, title, feedback, decisions, notes)).eq("id", meeting_id))
+
+
+def delete_meeting(meeting_id: str) -> None:
+    _run(get_client().table("supervisor_meetings").delete().eq("id", meeting_id))
+
+
+def list_feedback() -> list[dict]:
+    rows = _run(get_client().table("supervisor_feedback").select("*"))
+    return sorted(rows, key=lambda r: (r.get("received_period") or "", r.get("import_key") or "", r.get("created_at") or ""))
+
+
+def set_feedback_status(feedback_id: str, status: str, notes: str = "") -> None:
+    if status not in ("open", "addressed"):
+        raise DataError("Unknown status.")
+    _run(get_client().table("supervisor_feedback").update(
+        {"status": status, "notes": (notes or "").strip() or None}).eq("id", feedback_id))
+
+
+def list_research_phases() -> list[dict]:
+    rows = _run(get_client().table("research_phases").select("*"))
+    return sorted(rows, key=lambda r: r.get("position") or 0)
+
+
+# --------------------------------------------------------------- milestones
+
+MILESTONE_STATUSES = ["planned", "in_progress", "completed"]
+MILESTONE_LABELS = {"planned": "Planned", "in_progress": "In progress", "completed": "Completed"}
+
+
+def list_milestones() -> list[dict]:
+    rows = _run(get_client().table("thesis_milestones").select("*"))
+    return sorted(rows, key=lambda r: (r.get("position") or 0, r.get("created_at") or ""))
+
+
+def _clean_milestone(title, planned, status, actual, notes) -> dict:
+    title = (title or "").strip()
+    if not title:
+        raise DataError("Please give the milestone a name.")
+    if status not in MILESTONE_STATUSES:
+        raise DataError("Unknown milestone status.")
+    if status == "completed" and actual is None:
+        raise DataError("Please enter the date it was actually completed.")
+    if actual is not None and actual > today_kl():
+        raise DataError("The actual completion date cannot be in the future.")
+    return {
+        "title": title,
+        "due_date": planned.isoformat() if planned else None,
+        "status": status,
+        "completed_on": actual.isoformat() if (actual and status == "completed") else None,
+        "notes": (notes or "").strip() or None,
+    }
+
+
+def add_milestone(title, planned, position: int) -> None:
+    payload = _clean_milestone(title, planned, "planned", None, "")
+    payload["position"] = position
+    _run(get_client().table("thesis_milestones").insert(payload))
+
+
+def update_milestone(milestone_id, title, planned, status, actual, notes) -> None:
+    _run(get_client().table("thesis_milestones").update(
+        _clean_milestone(title, planned, status, actual, notes)).eq("id", milestone_id))
+
+
+def delete_milestone(milestone_id: str) -> None:
+    _run(get_client().table("thesis_milestones").delete().eq("id", milestone_id))
+
+
 # ------------------------------------------------------------------ import
 
 HISTORY_TABLES = [
     "module_settings", "goals", "research_phases", "supervisor_feedback",
     "thesis_milestones", "opportunities", "body_measurements", "workouts",
-    "strength_sets", "cardio_entries",
+    "strength_sets", "cardio_entries", "literature_sources", "supervisor_meetings",
 ]
 
 

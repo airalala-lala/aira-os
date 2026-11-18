@@ -50,6 +50,14 @@ def _act(action, message: str) -> None:
     st.rerun()
 
 
+def _sources_read(since):
+    """Papers with a 'date read'. Empty if the PhD Hub migration is not run yet."""
+    try:
+        return db.sources_read_since(since)
+    except db.DataError:
+        return []
+
+
 def _load() -> dict:
     today = today_kl()
     since = today - timedelta(days=60)
@@ -61,6 +69,7 @@ def _load() -> dict:
             "entries": db.list_time_entries(since),
             "running": db.running_timer(),
             "workouts": db.list_workouts(since),
+            "sources_read": _sources_read(since),
             "targets": db.get_setting("general", "weekly_targets", {}) or {},
         }
     except db.DataError as exc:
@@ -325,7 +334,9 @@ def _hours_row(label: str, minutes, target_hours, colour: str, limit: bool = Fal
 
 
 def _this_week(data: dict) -> None:
-    summary = planning.week_summary(data["entries"], data["workouts"], data["targets"], data["today"])
+    summary = planning.week_summary(
+        data["entries"], data["workouts"], data["targets"], data["today"], data["sources_read"]
+    )
     ui.section(
         "This week",
         f"{format_date(summary['week_start'])} to {format_date(summary['week_end'])} · actual versus planned",
@@ -347,7 +358,13 @@ def _this_week(data: dict) -> None:
     else:
         ui.meter("Workouts completed", f"{done or 0} of {target:g} planned", (done or 0) / target)
 
-    ui.meter("Research papers processed", "Not tracked yet · arrives with the PhD Hub")
+    done, target = summary["papers_done"], summary["papers_target"]
+    if done is None and target is None:
+        ui.meter("Research papers processed", "None recorded · no target set")
+    elif target is None:
+        ui.meter("Research papers processed", f"{done} recorded · no target set")
+    else:
+        ui.meter("Research papers processed", f"{done or 0} of {target:g} planned", (done or 0) / target, "teal")
     _hours_row("Business hours", summary["business_minutes"], summary["business_limit_hours"], "gold", limit=True)
     _hours_row("Personal and family time", summary["family_minutes"], summary["family_target_hours"], "rose")
 

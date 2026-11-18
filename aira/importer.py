@@ -22,6 +22,7 @@ import re
 from dataclasses import dataclass, field
 from datetime import date
 
+from aira import literature
 from aira.timeutil import today_kl
 
 MODULES = [
@@ -66,6 +67,16 @@ SPECS: dict[str, dict[str, str]] = {
         "load_value": "num", "load_unit": "str", "load_basis": "str",
         "load_text": "str", "notes": "str",
     },
+    "literature_sources": {
+        "import_key": "str", "title": "str!", "authors": "str", "year": "int",
+        "publication_date": "str", "doi": "str", "url": "str", "journal": "str",
+        "source_type": "str", "research_country": "str", "methodology": "str",
+        "theoretical_framework": "str", "key_findings": "str", "conclusions": "str",
+        "limitations": "str", "relevance": "str", "gap_contribution": "str",
+        "critical_notes": "str", "reading_status": "str", "date_read": "date",
+        "tags": "str", "citation": "str", "abstract": "str", "open_access": "str",
+        "summary_basis": "str", "summary_source": "str", "pii": "str", "scopus_eid": "str",
+    },
     "cardio_entries": {
         "import_key": "str", "workout_key": "str!", "position": "int!",
         "activity": "str!", "distance_m": "num", "duration_seconds": "int",
@@ -91,6 +102,11 @@ ALLOWED: dict[str, dict[str, list[str]]] = {
             "interview", "accepted", "rejected", "withdrawn", "closed",
         ],
     },
+    "literature_sources": {
+        "reading_status": literature.READING_STATUSES,
+        "summary_basis": literature.SUMMARY_BASIS,
+        "source_type": literature.SOURCE_TYPES,
+    },
     "workouts": {
         "status": ["planned", "completed", "skipped"],
         "kind": ["strength", "rowing", "swimming", "kettlebell", "mixed", "recovery", "other"],
@@ -109,13 +125,14 @@ DEFAULTS: dict[str, dict[str, object]] = {
     "thesis_milestones": {"status": "planned"},
     "opportunities": {"kind": "unspecified", "stage": "interested"},
     "cardio_entries": {"duration_approximate": False},
+    "literature_sources": {"reading_status": "not_recorded"},
 }
 
 # Parents first, so sets and cardio entries can find their workout.
 IMPORT_ORDER = [
     "module_settings", "goals", "research_phases", "supervisor_feedback",
     "thesis_milestones", "opportunities", "body_measurements", "workouts",
-    "strength_sets", "cardio_entries",
+    "strength_sets", "cardio_entries", "literature_sources",
 ]
 
 TABLE_LABELS = {
@@ -129,6 +146,7 @@ TABLE_LABELS = {
     "workouts": "Workout sessions",
     "strength_sets": "Strength sets",
     "cardio_entries": "Cardio entries",
+    "literature_sources": "Literature sources",
 }
 
 _CSV_NAME = re.compile(r"^(?:\d+[a-z]?_)?([a-z_]+)\.csv$")
@@ -213,6 +231,11 @@ def _check_row(table: str, row: dict, where: str, today: date) -> list[str]:
     if table == "thesis_milestones" and row.get("status") == "completed":
         if row.get("completed_on") is None:
             problems.append(f"{where}: a completed milestone needs completed_on")
+    if table == "literature_sources":
+        if row.get("year") is not None and not 1800 <= row["year"] <= today.year + 1:
+            problems.append(f"{where}: year {row['year']} is not plausible")
+        if row.get("date_read") and date.fromisoformat(row["date_read"]) > today:
+            problems.append(f"{where}: date_read is in the future")
     if table == "opportunities" and row.get("deadline") and not row.get("deadline_source_url"):
         problems.append(f"{where}: a deadline needs deadline_source_url (where it came from)")
     return problems
@@ -255,6 +278,12 @@ def _parse_table(table: str, raw_rows: list, source: str, today: date):
         if row_problems:
             problems.extend(row_problems)
             continue
+        if table == "literature_sources":
+            row["doi"] = literature.normalize_doi(row.get("doi")) or None
+            if not row.get("import_key"):
+                row["import_key"] = literature.source_key(
+                    row.get("doi"), row.get("scopus_eid"), row["title"], row.get("year")
+                )
         if "import_key" in spec and not row.get("import_key"):
             row["import_key"] = _auto_key(table, row)
         clean_rows.append(row)
@@ -268,6 +297,15 @@ def parse_files(files: dict[str, bytes], today: date | None = None):
     problems: list[str] = []
 
     for name in sorted(files):
+        if name.lower().endswith(".xlsx"):
+            raw_rows, errs = literature.read_matrix_xlsx(
+                files[name], f"Literature review matrix export ({name})"
+            )
+            problems.extend(f"{name}: {e}" for e in errs)
+            rows, errs = _parse_table("literature_sources", raw_rows, name, today)
+            rows_by_table.setdefault("literature_sources", []).extend(rows)
+            problems.extend(errs)
+            continue
         try:
             text = files[name].decode("utf-8-sig")
         except UnicodeDecodeError:
@@ -307,7 +345,7 @@ def parse_files(files: dict[str, bytes], today: date | None = None):
             rows_by_table.setdefault(table, []).extend(rows)
             problems.extend(errs)
         else:
-            problems.append(f"{name}: only .json and .csv files can be imported")
+            problems.append(f"{name}: only .json, .csv and .xlsx files can be imported")
 
     # The same record must not appear twice within the uploaded files.
     for table, rows in rows_by_table.items():

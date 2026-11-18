@@ -14,15 +14,13 @@ MODULES = [
         "icon": ":material/school:",
         "path": "views/phd.py",
         "phase": "Phase 2",
-        "built": False,
-        "summary": "Timeline, literature review manager, synthesis board, "
-        "supervisor meetings, POL500 and weekly planner.",
+        "built": True,
+        "summary": "Literature review manager, supervisor meetings and "
+        "thesis timeline. Synthesis board, POL500 and weekly planner next.",
         "planned": [
-            "Literature review manager with CSV import and duplicate checks",
-            "Supervisor meeting log with action items",
-            "Six-semester timeline with planned and actual dates",
             "Synthesis board and evidence tracker for each research gap",
             "POL500 tracker and PhD weekly planner",
+            "PDF attachments and Mendeley (RIS/BibTeX) import",
         ],
     },
     {

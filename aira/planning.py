@@ -139,7 +139,8 @@ def _in_week(value, start: date, end: date) -> bool:
 
 
 def week_summary(
-    time_entries: list[dict], workouts: list[dict], targets: dict, today: date
+    time_entries: list[dict], workouts: list[dict], targets: dict, today: date,
+    sources_read: list[dict] | None = None,
 ) -> dict:
     """Actual versus planned for the current week, from recorded data only.
 
@@ -165,6 +166,8 @@ def week_summary(
         value = (targets or {}).get(key)
         return value if isinstance(value, (int, float)) and value > 0 else None
 
+    papers = [s for s in (sources_read or []) if _in_week(s.get("date_read"), start, end)]
+
     logged_days = {parse_date(e.get("entry_date")) for e in finished}
     logged_days |= {parse_date(w.get("workout_date")) for w in done_workouts}
     days = []
@@ -180,6 +183,8 @@ def week_summary(
         "phd_target_hours": target("phd_hours"),
         "workouts_done": len(done_workouts) if done_workouts else None,
         "workouts_target": target("workouts"),
+        "papers_done": len(papers) if papers else None,
+        "papers_target": target("papers"),
         "business_minutes": minutes_for("business"),
         "business_limit_hours": target("business_hours_limit"),
         "family_minutes": minutes_for("family"),
