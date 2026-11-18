@@ -794,6 +794,31 @@ def delete_opportunity(opp_id: str) -> None:
     _run(get_client().table("opportunities").delete().eq("id", opp_id))
 
 
+# -------------------------------------------------------------- daily halo
+
+
+def habit_checks_since(habit: str, since: date) -> set:
+    """The days (as dates) on which a habit was ticked, from 'since' onward."""
+    rows = _run(get_client().table("habit_checks").select("check_date")
+                .eq("habit", habit).gte("check_date", since.isoformat()))
+    return {parse_date(r["check_date"]) for r in rows if r.get("check_date")}
+
+
+def tick_habit(habit: str, day: date) -> None:
+    if day > today_kl():
+        raise DataError("You can only tick today or an earlier day.")
+    try:
+        _run(get_client().table("habit_checks").insert({"habit": habit, "check_date": day.isoformat()}))
+    except DataError as exc:
+        if "already" in str(exc).lower() or "duplicate" in str(exc).lower():
+            return  # ticked already, for example on the other device
+        raise
+
+
+def untick_habit(habit: str, day: date) -> None:
+    _run(get_client().table("habit_checks").delete().eq("habit", habit).eq("check_date", day.isoformat()))
+
+
 # ------------------------------------------------------------ video library
 
 BUCKET = "attachments"
@@ -985,7 +1010,7 @@ def export_everything() -> dict:
         "profiles": _run(get_client().table("profiles").select("*")),
         "tasks": _run(get_client().table("tasks").select("*")),
     }
-    for table in HISTORY_TABLES + ["time_entries", "video_references", "video_concepts"]:
+    for table in HISTORY_TABLES + ["time_entries", "video_references", "video_concepts", "habit_checks"]:
         try:
             backup[table] = _run(get_client().table(table).select("*"))
         except DataError:

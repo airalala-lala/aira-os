@@ -29,27 +29,19 @@ _CSS = """
     --aira-track: #ECE5D6;
     --aira-button: #55735C;
 }
-@media (prefers-color-scheme: dark) {
-    :root {
-        --aira-bg: #1D1F1C;
-        --aira-bg2: #252824;
-        --aira-card: #2A2D29;
-        --aira-line: #3A3E38;
-        --aira-text: #ECE8DF;
-        --aira-muted: #A8A397;
-        --aira-sage: #9DB8A2;
-        --aira-sage-deep: #9DB8A2;
-        --aira-teal: #7FB3B3;
-        --aira-rose: #D9B0B3;
-        --aira-gold: #D1B279;
-        --aira-track: #383C36;
-        --aira-button: #6E8F76;
-    }
-}
-
 /* Page background and width */
-.stApp { background: var(--aira-bg); }
-[data-testid="stSidebar"] { background: var(--aira-bg2); }
+.stApp {
+    background:
+        radial-gradient(circle at 12% -5%, rgba(233, 205, 196, 0.45) 0, transparent 38%),
+        radial-gradient(circle at 95% 8%, rgba(188, 214, 196, 0.45) 0, transparent 35%),
+        radial-gradient(circle at 50% 110%, rgba(232, 214, 170, 0.35) 0, transparent 45%),
+        var(--aira-bg);
+    background-attachment: fixed;
+}
+[data-testid="stSidebar"] {
+    background: linear-gradient(180deg, #F3EEE3 0%, #EEF3EC 100%);
+    border-right: 1px solid var(--aira-line);
+}
 [data-testid="stHeader"] { background: transparent; }
 [data-testid="stMainBlockContainer"], .block-container {
     max-width: 1080px;
@@ -71,6 +63,41 @@ _CSS = """
 /* Tabs and choices in sage as well */
 button[data-baseweb="tab"][aria-selected="true"] p { color: var(--aira-button) !important; }
 [data-baseweb="tab-highlight"] { background-color: var(--aira-button) !important; }
+
+/* The halo: a daily check-in ring on Home */
+.aira-halo-row { display: flex; align-items: center; gap: 1.1rem; }
+.aira-halo {
+    flex: 0 0 auto; width: 84px; height: 84px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    background: radial-gradient(circle, #FFFDF8 52%, #F3EEE3 100%);
+    border: 3px solid #E2D6BC;
+    box-shadow: 0 0 0 6px rgba(226, 214, 188, 0.25);
+    color: #A98545;
+}
+.aira-halo.done {
+    border-color: #7DB38A;
+    color: #3F7A4E;
+    background: radial-gradient(circle, #F4FBF3 50%, #DCEFDD 100%);
+    box-shadow: 0 0 0 6px rgba(125, 179, 138, 0.25), 0 0 28px 8px rgba(125, 179, 138, 0.45);
+    animation: aira-glow 4s ease-in-out infinite;
+}
+@keyframes aira-glow {
+    0%, 100% { box-shadow: 0 0 0 6px rgba(125, 179, 138, 0.22), 0 0 22px 6px rgba(125, 179, 138, 0.35); }
+    50% { box-shadow: 0 0 0 8px rgba(125, 179, 138, 0.30), 0 0 34px 12px rgba(125, 179, 138, 0.50); }
+}
+@media (prefers-reduced-motion: reduce) { .aira-halo.done { animation: none; } }
+.aira-halo svg { width: 34px; height: 34px; }
+.aira-halo-q { font-weight: 650; color: var(--aira-text); font-size: 1.02rem; }
+.aira-halo-note { color: var(--aira-muted); font-size: 0.86rem; margin-top: 0.15rem; }
+.aira-halo-week { display: flex; gap: 0.3rem; margin-top: 0.45rem; }
+.aira-halo-dot {
+    width: 22px; height: 22px; border-radius: 50%; font-size: 0.62rem;
+    display: flex; align-items: center; justify-content: center;
+    border: 1px solid var(--aira-line); color: var(--aira-muted); background: #FFFDF8;
+}
+.aira-halo-dot.done { background: #7DB38A; border-color: #7DB38A; color: #FFFFFF; }
+.aira-halo-dot.future { opacity: 0.4; border-style: dashed; }
+.aira-halo-dot.today { outline: 2px solid #E2D6BC; outline-offset: 1px; }
 
 /* Headings */
 .aira-eyebrow {
@@ -101,6 +128,7 @@ button[data-baseweb="tab"][aria-selected="true"] p { color: var(--aira-button) !
 
 /* Cards */
 [data-testid="stVerticalBlockBorderWrapper"] {
+    box-shadow: 0 1px 2px rgba(60, 50, 30, 0.04), 0 6px 18px rgba(85, 115, 92, 0.06);
     border-radius: 16px; background: var(--aira-card); border-color: var(--aira-line);
 }
 .aira-card-title { font-weight: 650; font-size: 1rem; color: var(--aira-text); }
@@ -298,3 +326,27 @@ def bottom_nav() -> None:
     with st.container(key="bottomnav", horizontal=True):
         for item in BOTTOM_NAV:
             st.page_link(item["path"], label=item["label"], icon=item["icon"])
+
+
+BOOK_SVG = (
+    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" '
+    'stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'
+    '<path d="M12 6.5C10.2 5.2 7.6 4.6 4 4.8v13c3.6-.2 6.2.4 8 1.7 1.8-1.3 4.4-1.9 8-1.7v-13'
+    'c-3.6-.2-6.2.4-8 1.7z"/><path d="M12 6.5v13"/></svg>'
+)
+
+
+def halo(done: bool, question: str, note: str, week: list[dict]) -> None:
+    """The daily check-in ring: soft gold when not yet ticked, glowing green when done."""
+    dots = "".join(
+        f'<div class="aira-halo-dot {d["state"]}{" today" if d.get("today") else ""}" '
+        f'title="{d["date"]:%A %d %b}">{d["date"]:%a}'[: -2] + "</div>"
+        for d in week
+    )
+    st.markdown(
+        f'<div class="aira-halo-row"><div class="aira-halo{" done" if done else ""}">{BOOK_SVG}</div>'
+        f'<div><div class="aira-halo-q">{html.escape(question)}</div>'
+        f'<div class="aira-halo-note">{html.escape(note)}</div>'
+        f'<div class="aira-halo-week">{dots}</div></div></div>',
+        unsafe_allow_html=True,
+    )

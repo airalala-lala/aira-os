@@ -68,6 +68,45 @@ def _fill_plan(today) -> None:
         pass  # the Fitness Studio shows any problem; Home stays usable
 
 
+QURAN = "quran_page"
+
+
+def _halo(today) -> None:
+    """The daily Quran check-in. Gentle: no streaks to lose, missed days stay plain."""
+    monday = today - timedelta(days=today.weekday())
+    try:
+        done_days = db.habit_checks_since(QURAN, monday)
+    except db.DataError:
+        st.caption("The daily halo needs migration 0009. Run supabase/migrations/0009_daily_halo.sql in Supabase.")
+        return
+    done = today in done_days
+    week = [{"date": monday + timedelta(days=i),
+             "state": "done" if monday + timedelta(days=i) in done_days else ("future" if monday + timedelta(days=i) > today else "open"),
+             "today": monday + timedelta(days=i) == today} for i in range(7)]
+    count = len([d for d in done_days if d <= today])
+    note = "Alhamdulillah, done for today." if done else "Tap below when you have read."
+    if count:
+        note += f" {count} {'day' if count == 1 else 'days'} this week."
+    with st.container(border=True, key="halo_card"):
+        ui.halo(done, "Have you read at least one page of Quran today?", note, week)
+        with st.container(horizontal=True, gap="small"):
+            if not done:
+                if st.button("Yes, I have", type="primary", key="halo_yes", icon=":material/check:"):
+                    try:
+                        db.tick_habit(QURAN, today)
+                    except db.DataError as exc:
+                        st.error(str(exc))
+                    else:
+                        st.rerun()
+            elif st.button("Undo", key="halo_undo"):
+                try:
+                    db.untick_habit(QURAN, today)
+                except db.DataError as exc:
+                    st.error(str(exc))
+                else:
+                    st.rerun()
+
+
 def _opportunities():
     try:
         return db.list_opportunities()
@@ -564,6 +603,8 @@ def main() -> None:
     flash = st.session_state.pop("_flash", None)
     if flash:
         st.toast(flash)
+
+    _halo(today)
 
     if data["running"]:
         _timer_banner(data["running"])

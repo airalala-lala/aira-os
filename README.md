@@ -38,7 +38,7 @@ Use a brand-new project for AIRA OS. Do not reuse a project that holds anything 
 
 ### A2. Create the database tables
 
-There are eight SQL files in the `supabase/migrations` folder. Run them **in number order**, one at a time.
+There are nine SQL files in the `supabase/migrations` folder. Run them **in number order**, one at a time.
 
 1. In the left sidebar, click **SQL Editor**.
 2. Click **New query** (or the **+** button).
@@ -54,6 +54,7 @@ There are eight SQL files in the `supabase/migrations` folder. Run them **in num
    - `0006_fitness_studio.sql`
    - `0007_global_opportunities.sql`
    - `0008_video_library.sql`
+   - `0009_daily_halo.sql`
 
 Every file is safe to run more than once. If you ever re-run an older file, run the later ones again afterwards too, in order.
 
@@ -174,7 +175,7 @@ Work through this list. Every line should behave as described.
 | 16 | **Settings → Prepare backup → Download full backup (JSON)** | A file downloads containing your records |
 | 17 | Click **Sign out** in the sidebar | Back to the sign-in card |
 
-Times and dates on screen should be Malaysia time. The colours follow your device: ivory in light mode, dark in dark mode.
+Times and dates on screen should be Malaysia time. The app always uses the warm ivory theme, whatever your device's dark-mode setting.
 
 When these pass, tell me "Phase 1 works" and we start the PhD Research Hub. If any line fails, tell me its number and what you saw instead. A screenshot helps most for lines 11 and 14, because the phone layout is the part I could not test here.
 
@@ -326,6 +327,13 @@ To have the app ask Claude directly:
 | 7 | Generate with Claude (with a key) or paste Claude's answer (without), then **Save video plan** | It appears in **Video plans**, where you can edit, approve or delete it |
 | 8 | Open the library on your iPhone | The same references and plans |
 
+## Part K: brighter look and the daily halo
+
+1. In Supabase **SQL Editor**, run `supabase/migrations/0009_daily_halo.sql`. You should see **Success. No rows returned**.
+2. Upload the new project to GitHub (with hidden files showing, so the `.streamlit` theme file is included), then reboot the app.
+3. Open **Home**. The app is now warm ivory with soft sage and blush tints, on every device.
+4. At the top of Home: "Have you read at least one page of Quran today?" Tap **Yes, I have**. The ring glows green and today's dot fills in. **Undo** removes it. It shows the same on your iPhone.
+
 ### Add it to your iPhone Home Screen
 
 In Safari, open the app, tap the **Share** button, then **Add to Home Screen**. It then opens like an app. Let Safari save your password so signing in is one tap.
@@ -339,8 +347,8 @@ In Safari, open the app, tap the **Share** button, then **Add to Home Screen**. 
 | "AIRA OS is not configured yet. Missing settings: …" | The Secrets box is empty or a name is misspelt | Streamlit app **Settings → Secrets**. Paste the three lines again, check the names exactly, **Save** |
 | "The key you provided is a SECRET / service_role key" | The wrong key was pasted | Replace it with the `sb_publishable_` key. Then in Supabase, delete that secret key and create a new one, since it has been pasted somewhere it should not be |
 | "That email or password is not correct" with the right password | `ALLOWED_EMAIL` does not match the Supabase user's email | Make them identical, including spelling |
-| "A database table is missing" | A migration was not run | Repeat step A2. All eight files are needed, in number order |
-| "The database refused this request (permission denied)" | A migration only partly ran | Run all eight files again in order; it is safe to repeat |
+| "A database table is missing" | A migration was not run | Repeat step A2. All nine files are needed, in number order |
+| "The database refused this request (permission denied)" | A migration only partly ran | Run all nine files again in order; it is safe to repeat |
 | No bar of buttons at the bottom on iPhone | The phone layout needs adjusting | Use the **>** arrow at the top left to open the menu, and send me a screenshot |
 | A timer was left running overnight | You forgot to stop it | The banner asks for the minutes you actually worked, or click **Discard this timer** |
 | "Could not reach the database" or "Could not reach Supabase" | The Supabase project is paused after a quiet week, or there is no internet | Supabase dashboard → your project → **Resume project** |

@@ -256,6 +256,11 @@ Navigation: sidebar on desktop; on a phone, the same menu plus a bottom bar (Hom
 - The database refuses a deadline without a `deadline_source_url`.
 - The 13 opportunities in `07_opportunities_2027.json` were researched on 18 November 2026; see the doc "Global Opportunities 2027: deadline plan" for the reasoning and sources. AIRA OS does not search the web by itself.
 
+## 16a. Look and the daily halo
+
+- One warm light theme on every device (`.streamlit/config.toml`, `base = "light"`), with soft blush, sage and gold tints in the background and light shadows on cards. Dark mode was removed at Aira's request (18 Nov 2026).
+- **Daily halo** at the top of Home: "Have you read at least one page of Quran today?" One tap stores a row in `habit_checks` (`habit = 'quran_page'`, `check_date`, unique per day, migration 0009); the ring then glows green. The week strip fills only the days ticked; missed days stay plain, with no streak to lose. Undo deletes today's row.
+
 ## 16. Video Inspiration Library rules
 
 - **The link is always saved.** Details are then looked up once: YouTube, TikTok and Vimeo through their public oEmbed services, other sites through the page's Open Graph preview tags. Instagram and Facebook require a developer account for this, so they are saved as link only.
