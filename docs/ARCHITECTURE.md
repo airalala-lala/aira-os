@@ -1,6 +1,6 @@
 # AIRA OS 2.0: architecture and plan
 
-Version 2.1 · updated 18 November 2026 · Phase 1 deployed and tested on MacBook and iPhone; Phase 2a built.
+Version 2.2 · updated 18 November 2026 · Phase 1 and Phase 2a deployed and tested; Phase 3 (Fitness Studio) built.
 
 **Purpose:** help Aira protect her priorities, regain consistency and make meaningful progress without feeling overwhelmed. The app should make the next good action obvious, take under two minutes a day, and still be useful when it is only opened a few times a week.
 
@@ -13,7 +13,7 @@ Inspected before building: the version 0.2 project (login, a simple task list, b
 | Modules | Five, including a Personal Planner | Six: PhD Research Hub, Fitness Studio, Business & Boundaries, Weekly Life Review, Global Opportunities, Creator Lab. The planner's job moved into the home page and the Weekly Life Review |
 | Home page | Task list and counts | Daily command centre: Top 3, focus today, timer, weekly progress, Restart mode |
 | Look | Light only, teal | Ivory, sage, muted teal, dusty rose and gold; light and dark; bottom bar on phones |
-| Database | Migrations 0001 to 0003 | Adds 0004 (command centre) and 0005 (PhD Hub). Earlier files are unchanged, and neither changes an existing record |
+| Database | Migrations 0001 to 0003 | Adds 0004 (command centre), 0005 (PhD Hub) and 0006 (Fitness Studio). Earlier files are unchanged, and none changes an existing record |
 | Tests | None in the project | `tests/test_core.py` |
 
 ## 2. Stack decision
@@ -60,6 +60,7 @@ aira-os/
 │   ├── planning.py             Top 3, weekly summary and Restart logic (no database, fully tested)
 │   ├── importer.py             Parses and validates import files; blocks duplicates
 │   ├── literature.py           DOI cleaning, duplicate keys, Excel matrix reader
+│   ├── fitness.py              Set cleaning, personal bests, weekly counts, weight average (no database)
 │   ├── timeutil.py             Asia/Kuala_Lumpur date and time helpers
 │   ├── modules.py              The six modules and the phone bottom bar
 │   └── ui.py                   Colours, cards, meters, empty states
@@ -68,9 +69,10 @@ aira-os/
 │   ├── settings.py             Profile, weekly targets, password, backup
 │   ├── import_data.py          Upload, preview and import
 │   ├── phd.py                  PhD Research Hub (Overview, Literature, Supervision, Timeline)
-│   └── fitness.py, business.py, review.py, opportunities.py, creator.py
+│   ├── fitness.py              Fitness Studio (Overview, Log, Progress, Weight, Plan)
+│   └── business.py, review.py, opportunities.py, creator.py
 ├── supabase/
-│   ├── migrations/             0001 to 0005, run in order, never edited after use
+│   ├── migrations/             0001 to 0006, run in order, never edited after use
 │   └── verify_security.sql     Read-only check of RLS and grants
 ├── tests/test_core.py          Basic tests
 └── docs/ARCHITECTURE.md        This document
@@ -85,7 +87,7 @@ aira-os/
 - Row Level Security on, four "own rows only" policies, access granted to `authenticated` only and nothing to `anon`.
 - `check` lists on status fields; `import_key` with a uniqueness rule on tables that accept imports.
 
-### Built now (migrations 0001 to 0005)
+### Built now (migrations 0001 to 0006)
 
 | Table | Purpose | Key columns |
 |---|---|---|
@@ -98,9 +100,9 @@ aira-os/
 | `supervisor_feedback` | Feedback items | `received_period`, `received_on`, `item`, `status` |
 | `thesis_milestones` | Prospectus to graduation | `position`, `title`, `due_date`, `status`, `completed_on` |
 | `opportunities` | Applications and opportunities | `kind`, `title`, `organisation`, `url`, `deadline`, `deadline_source_url`, `stage`, `outcome` |
-| `body_measurements` | Weight entries | `measured_on`, `weight_kg` |
-| `workouts` | One session, planned or completed | `workout_date`, `kind`, `status`, `duration_min`, `location`, `notes` |
-| `strength_sets` | One row per set | `workout_id`, `exercise_name`, `set_number`, `reps`, `load_value`, `load_unit` (kg, lb, machine_units), `load_basis` (total, per_side, per_dumbbell), `load_text` |
+| `body_measurements` | Weight and optional measurements | `measured_on`, `weight_kg`, `waist_cm`, `hip_cm`, `notes` (at least one measurement per row) |
+| `workouts` | One session, planned, completed or skipped | `workout_date`, `kind`, `status`, `duration_min`, `location`, `rpe` (session effort 1 to 10), `notes` |
+| `strength_sets` | One row per set | `workout_id`, `exercise_name`, `set_number`, `reps`, `load_value`, `load_unit` (kg, lb, machine_units), `load_basis` (total, per_side, per_dumbbell), `load_text` (original wording), `rpe` |
 | `cardio_entries` | Rowing, treadmill, swimming | `workout_id`, `activity`, `distance_m`, `duration_seconds`, `duration_approximate`, `settings_text` |
 | `literature_sources` | Literature review database | `title`, `authors`, `year`, `doi`, `url`, `journal`, `source_type`, `research_country`; source evidence: `methodology`, `theoretical_framework`, `key_findings`, `conclusions`, `limitations`, `abstract`; my thinking: `relevance`, `gap_contribution`, `critical_notes`, `tags`; `reading_status`, `date_read`, `citation`; provenance: `summary_source`, `summary_basis` (full text or abstract only), `pii`, `scopus_eid` |
 | `supervisor_meetings` | Supervision log | `meeting_date`, `title`, `feedback`, `decisions`, `notes`. Action items are PhD `tasks` with `meeting_id`, so they reach Today's Top 3 |
@@ -114,7 +116,7 @@ How the tables requested in the brief map onto this design: *Users* → `auth.us
 | Phase | Tables | Notes |
 |---|---|---|
 | 2b PhD Hub | `themes`, `source_themes` (stance: supports, contradicts, mixed), `gap_claims` + `claim_evidence` (policy, curriculum, teacher knowledge, implementation and theoretical gaps, each claim linked to real sources), `course_items` (POL500), `weekly_plans`, `attachments` (PDFs), RIS/BibTeX import that fills missing authors and journals by DOI | Literature, meetings and timeline were built in 2a |
-| 3 Fitness | `exercises`, optional `habit_logs` and `meal_logs`; `body_measurements` gains optional measurements; `strength_sets` gains `rpe` | No conversion between units or machines |
+| 8 Polish | optional `habit_logs` and `meal_logs` (meals, protein estimates, hydration) | No diagnoses, no invented precision |
 | 4 Business | `tasks` gains `delegated_to`, `waiting_on`; `day_closures` (End Business Day) | Time comes from `time_entries` |
 | 5 Review | `weekly_reviews` (week start, six answers, next week's top three, saved summary) | One per week |
 | 6 Opportunities | `opportunities` gains eligibility, required documents, contact, follow-up date; `events` (conference radar: organiser, location, dates, abstract and registration deadlines, fees, funding, official URL, verification date, status) | Deadlines require a source link |
@@ -154,7 +156,7 @@ Both devices read the same database, so there is nothing to synchronise. A recor
 | **1. Foundation and daily command centre** (built) | Login, new design, Top 3, focus timer and time log, quick workout log, weekly progress with targets and business limit, Restart mode, tasks, backup, import | README Part D passes on both devices |
 | **2a. PhD Research Hub** (built) | Literature manager with Excel matrix and CSV import, search, tags and duplicate checks; supervisor meeting log with action items; feedback checklist; timeline with planned and actual dates, semester bands and chart; "papers processed" on Home | README Part F passes |
 | **2b. PhD Research Hub** | Synthesis board, research-problem evidence tracker, POL500 tracker, PhD weekly planner, PDF attachments, Mendeley RIS/BibTeX import | A real paper can be found again by theme |
-| **3. Fitness Studio** | Weight tracker with trend and goal line, full workout logger with sets, progression and personal bests, weekly training planner, consistency view | Charts are drawn only from entries made by you |
+| **3. Fitness Studio** (built) | Workout logger with sets and cardio in editable tables, "repeat a previous session", edit and delete; progress per exercise and machine; personal bests per unit; rowing and swimming logs; weight chart with 14-day average and goal line; optional waist and hip; weekly plan with done, skip, remove and move; consistency chart by week and month; gentle restart after 7 quiet days | README Part G passes |
 | **4. Business & Boundaries** | Business task list with delegation and waiting-on, time summaries, allocation across areas, End Business Day | The weekly limit warning is driven by a full week of real logs |
 | *Checkpoint* | Test persistence across sessions and devices; revisit the stack decision | |
 | **5. Weekly Life Review** | Six questions, summary from recorded data, saved reflections, week comparison | A Sunday review takes under ten minutes |
@@ -173,7 +175,8 @@ Both devices read the same database, so there is nothing to synchronise. A recor
 | **Settings** | Profile, weekly targets and business limit, password, backup | Save targets; download JSON and CSV backups |
 | **Import data** | Preview split into new and already stored | Import only what is new, after ticking a confirmation |
 | **PhD Research Hub** (Phase 2a) | Overview (counts, research phases); Literature (search, filters, table, source detail with evidence kept apart from my thinking); Supervision (feedback checklist, meetings, action items); Timeline (milestones, chart, semester dates) | Add, edit, delete and import sources; mark read today; record meetings and action items; set planned and actual milestone dates |
-| **Other five module pages** | "Not built yet" with the planned features | Nothing yet |
+| **Fitness Studio** (Phase 3) | Overview (this week, last workout, last recorded weight, consistency); Log (session and set tables, repeat, past workouts); Progress (chart, history, personal bests, rowing, swimming); Weight (chart, entries, goal); Plan (this or next week, day by day) | Log, edit and delete workouts and sets; add, edit and delete measurements; plan, move, skip and complete sessions |
+| **Other four module pages** | "Not built yet" with the planned features | Nothing yet |
 
 Navigation: sidebar on desktop; on a phone, the same menu plus a bottom bar (Home, PhD, Fitness, Business, Review).
 
@@ -184,10 +187,6 @@ Navigation: sidebar on desktop; on a phone, the same menu plus a bottom bar (Hom
 | **PhD · Synthesis** | Themes with their sources, contradictory findings side by side, my interpretation shown separately from source evidence |
 | **PhD · Research problem** | The five gaps, each with claims and the sources that support them |
 | **PhD · POL500 and weekly plan** | Assignments, readings, deadlines; weekly targets, blockers, reflection |
-| **Fitness · Weight** | Entries, trend, moving average, goal line |
-| **Fitness · Log** | A workout with several exercises and sets, quick repeat of the last session |
-| **Fitness · Progress** | Per-exercise history and personal bests, shown per machine and unit |
-| **Fitness · Plan** | The week's strength, rowing, swimming and recovery days, easy to move |
 | **Business** | Task list, time this week against the limit, allocation across areas, End Business Day |
 | **Weekly Review** | Six questions, the week's recorded numbers, past weeks |
 | **Opportunities** | Application tracker; conference radar with official links |
@@ -227,4 +226,13 @@ Navigation: sidebar on desktop; on a phone, the same menu plus a bottom bar (Hom
 - Its Methods, Results and Conclusions columns are summaries from the export, not Aira's notes. They are stored as source evidence and labelled with `summary_source`. 37 of the 52 were summarised from the abstract only (`summary_basis = abstract`); the page says so.
 - Reading status is imported as "Not recorded", because the file does not say which papers have been read.
 - Publication dates are kept as written; two are issue dates in late 2026 and January 2027.
+
+## 14. Fitness rules
+
+- A personal best is the heaviest recorded set for an exercise **within one unit and basis** (kg, lb, kg per side, kg per dumbbell, machine units). Ties go to the set with more reps. Planned and skipped sessions never count.
+- Each exercise name is its own series, so "Leg press", "Icarian leg press" and "Precor leg press" are never compared.
+- The weight line is a 14-day average of the entries actually recorded in that window. Days without an entry are not filled in.
+- The weekly consistency chart counts completed workouts only. Weeks with nothing recorded show no bar.
+- A planned session can only be marked done on or after its day.
+- Editing a workout updates changed sets, adds new ones and deletes removed ones. Imported sets keep their import key, so re-importing the seed files never duplicates them.
 

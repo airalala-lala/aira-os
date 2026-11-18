@@ -10,7 +10,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from aira import importer, literature, planning, timeutil  # noqa: E402
+from aira import fitness, importer, literature, planning, timeutil  # noqa: E402
 
 TODAY = date(2026, 11, 17)  # a Tuesday
 
@@ -231,6 +231,88 @@ class LiteratureTests(unittest.TestCase):
         summary = planning.week_summary([], [], {"papers": 5}, TODAY, read)
         self.assertEqual((summary["papers_done"], summary["papers_target"]), (1, 5))
         self.assertIsNone(planning.week_summary([], [], {}, TODAY, [])["papers_done"])
+
+
+
+W = [
+    {"id": "w1", "workout_date": "2026-10-12", "status": "completed"},
+    {"id": "w2", "workout_date": "2026-10-31", "status": "completed"},
+    {"id": "w3", "workout_date": "2026-11-20", "status": "planned"},
+]
+SETS = [
+    {"workout_id": "w1", "exercise_name": "Lat pulldown", "set_number": 1, "reps": 12, "load_value": 27, "load_unit": "kg", "load_basis": None},
+    {"workout_id": "w1", "exercise_name": "Lat pulldown", "set_number": 2, "reps": 6, "load_value": 32, "load_unit": "kg", "load_basis": None},
+    {"workout_id": "w2", "exercise_name": "Lat pulldown", "set_number": 1, "reps": 8, "load_value": 32, "load_unit": "kg", "load_basis": None},
+    {"workout_id": "w2", "exercise_name": "Chest press machine", "set_number": 1, "reps": 10, "load_value": 50, "load_unit": "lb", "load_basis": None},
+    {"workout_id": "w2", "exercise_name": "Precor leg press", "set_number": 1, "reps": 10, "load_value": 20, "load_unit": "kg", "load_basis": "per_side"},
+    {"workout_id": "w3", "exercise_name": "Lat pulldown", "set_number": 1, "reps": 10, "load_value": 40, "load_unit": "kg", "load_basis": None},
+]
+
+
+class FitnessTests(unittest.TestCase):
+    def test_set_rows_are_cleaned_and_numbered(self):
+        rows = [
+            {"Exercise": "Leg press", "Reps": 15, "Load": 80, "Unit": "kg"},
+            {"Exercise": "Leg press", "Reps": 15, "Load": 100, "Unit": "kg"},
+            {"Exercise": "Lat pulldown", "Reps": 12, "Load": 27, "Unit": "kg"},
+            {"Exercise": None, "Reps": None, "Load": None, "Unit": None},  # empty row ignored
+            {"Exercise": None, "Reps": None, "Load": None, "Unit": "kg"},  # only the default unit: ignored
+        ]
+        clean, problems = fitness.clean_set_rows(rows)
+        self.assertEqual(problems, [])
+        self.assertEqual([(r["exercise_name"], r["position"], r["set_number"]) for r in clean],
+                         [("Leg press", 1, 1), ("Leg press", 1, 2), ("Lat pulldown", 2, 1)])
+
+    def test_set_rows_reject_bad_values(self):
+        rows = [
+            {"Exercise": "", "Reps": 10},
+            {"Exercise": "Squat", "Reps": 0},
+            {"Exercise": "Squat", "Load": 20, "Unit": None},
+            {"Exercise": "Squat", "Reps": 8.5},
+            {"Exercise": "Squat", "RPE": 11},
+        ]
+        clean, problems = fitness.clean_set_rows(rows)
+        self.assertEqual((clean, len(problems)), ([], 5))
+
+    def test_cardio_minutes_become_seconds(self):
+        clean, problems = fitness.clean_cardio_rows([{"Activity": "Rowing", "Distance (m)": 1000, "Minutes": 5.5, "Approx.": True}])
+        self.assertEqual(problems, [])
+        self.assertEqual((clean[0]["duration_seconds"], clean[0]["duration_approximate"]), (330, True))
+
+    def test_edits_keep_existing_rows(self):
+        original = [{"id": "a"}, {"id": "b"}]
+        clean = [{"id": "a", "reps": 9}, {"id": None, "reps": 5}]
+        inserts, updates, deletes = fitness.diff_rows(clean, original)
+        self.assertEqual(([u["id"] for u in updates], deletes, len(inserts)), (["a"], ["b"], 1))
+        self.assertNotIn("id", inserts[0])
+
+    def test_personal_bests_never_mix_units_or_planned_sessions(self):
+        bests = {(b["exercise"], b["series"]): b for b in fitness.personal_bests(SETS, W)}
+        self.assertEqual(bests[("Lat pulldown", "kg")]["load"], 32)   # 40 kg was only planned
+        self.assertEqual(bests[("Lat pulldown", "kg")]["reps"], 8)    # tie on 32 kg -> more reps
+        self.assertEqual(bests[("Chest press machine", "lb")]["load"], 50)
+        self.assertIn(("Precor leg press", "kg per side"), bests)
+
+    def test_exercise_history_uses_heaviest_set_per_session(self):
+        history = fitness.exercise_history(SETS, W, "Lat pulldown")
+        self.assertEqual([r["top"][("kg", "total")]["load"] for r in history], [32, 32])
+        self.assertEqual(history[0]["sets"], ["27 kg × 12", "32 kg × 6"])
+
+    def test_load_labels(self):
+        self.assertEqual(fitness.load_label({"load_value": 20, "load_unit": "kg", "load_basis": "per_side"}), "20 kg per side")
+        self.assertEqual(fitness.load_label({"load_value": 6, "load_unit": "kg", "load_basis": "per_dumbbell"}), "6 kg per dumbbell")
+        self.assertEqual(fitness.load_label({"load_value": None, "load_text": "9–10 kg"}), "9–10 kg")
+
+    def test_weekly_counts_leave_empty_weeks_empty(self):
+        counts = fitness.weekly_counts(W, date(2026, 11, 2), 4)
+        # Weeks of 12, 19 and 26 Oct and 2 Nov; 31 Oct is a Saturday in the 26 Oct week.
+        self.assertEqual([c["count"] for c in counts], [1, None, 1, None])
+
+    def test_moving_average_uses_recorded_entries_only(self):
+        points = [(date(2026, 10, 1), 68.10), (date(2026, 10, 12), 67.25), (date(2026, 10, 31), 66.10)]
+        avg = fitness.moving_average(points, 14)
+        self.assertEqual(avg[1][1], round((68.10 + 67.25) / 2, 2))
+        self.assertEqual(avg[2][1], 66.10)  # nothing else recorded in the 14 days before
 
 
 if __name__ == "__main__":

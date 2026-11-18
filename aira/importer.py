@@ -56,16 +56,17 @@ SPECS: dict[str, dict[str, str]] = {
     },
     "body_measurements": {
         "import_key": "str", "measured_on": "date!", "weight_kg": "num!", "notes": "str",
+        "waist_cm": "num", "hip_cm": "num",
     },
     "workouts": {
         "import_key": "str!", "workout_date": "date!", "location": "str",
-        "kind": "str", "status": "str!", "duration_min": "int", "notes": "str",
+        "kind": "str", "status": "str!", "duration_min": "int", "notes": "str", "rpe": "num",
     },
     "strength_sets": {
         "import_key": "str", "workout_key": "str!", "position": "int!",
         "exercise_name": "str!", "set_number": "int", "reps": "int",
         "load_value": "num", "load_unit": "str", "load_basis": "str",
-        "load_text": "str", "notes": "str",
+        "load_text": "str", "notes": "str", "rpe": "num",
     },
     "literature_sources": {
         "import_key": "str", "title": "str!", "authors": "str", "year": "int",

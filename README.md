@@ -38,7 +38,7 @@ Use a brand-new project for AIRA OS. Do not reuse a project that holds anything 
 
 ### A2. Create the database tables
 
-There are five SQL files in the `supabase/migrations` folder. Run them **in number order**, one at a time.
+There are six SQL files in the `supabase/migrations` folder. Run them **in number order**, one at a time.
 
 1. In the left sidebar, click **SQL Editor**.
 2. Click **New query** (or the **+** button).
@@ -51,6 +51,7 @@ There are five SQL files in the `supabase/migrations` folder. Run them **in numb
    - `0003_history_tables.sql`
    - `0004_command_centre.sql`
    - `0005_phd_hub.sql`
+   - `0006_fitness_studio.sql`
 
 Every file is safe to run more than once. If you ever re-run an older file, run the later ones again afterwards too, in order.
 
@@ -226,6 +227,30 @@ The Excel file stays on your MacBook. Only its rows go into your private databas
 | 10 | Enter your semester dates and **Save semester dates** | Shaded semester bands appear on the chart |
 | 11 | In **Settings**, set **Research papers processed per week** | Home shows papers against your target |
 
+## Part G: Fitness Studio (Phase 3)
+
+### G1. Update the database
+
+In Supabase, open **SQL Editor**, then **New query**. Paste the contents of `supabase/migrations/0006_fitness_studio.sql` and click **Run**. You should see **Success. No rows returned**.
+
+### G2. Update the app
+
+Upload the whole project to GitHub again, the same way as before, and wait about two minutes.
+
+### G3. Test it
+
+| # | Do this | You should see |
+|---|---|---|
+| 1 | Open **Fitness Studio** | Five tabs: Overview, Log, Progress, Weight, Plan. Overview shows your last recorded workout (31 Oct) and last recorded weight (66.10 kg), labelled as not today's weight |
+| 2 | **Weight** tab | A chart of your 7 weights, a 14-day average line and a dotted 50 kg goal line |
+| 3 | **Log** tab: open **Repeat a previous session**, choose 31 Oct, tap **Copy into the log below** | The table fills with that session's exercises. Change any reps or loads, then **Save workout** |
+| 4 | **Progress** tab: choose **Precor leg press** | Its history, with loads shown as "kg per side" |
+| 5 | **Personal bests** | One row per exercise and unit. Chest press stays in lb |
+| 6 | **Plan** tab: **Add to the plan** a swimming session tomorrow | It appears on tomorrow's line with **Skip**, **Remove** and **Move**. **Done** appears on the day itself |
+| 7 | Open a past workout in **Log**, switch on **Edit this workout**, change one number, **Save changes** | Only that set changes |
+
+Only enter real sessions and measurements. Delete any test entries you make.
+
 ### Add it to your iPhone Home Screen
 
 In Safari, open the app, tap the **Share** button, then **Add to Home Screen**. It then opens like an app. Let Safari save your password so signing in is one tap.
@@ -239,8 +264,8 @@ In Safari, open the app, tap the **Share** button, then **Add to Home Screen**. 
 | "AIRA OS is not configured yet. Missing settings: …" | The Secrets box is empty or a name is misspelt | Streamlit app **Settings → Secrets**. Paste the three lines again, check the names exactly, **Save** |
 | "The key you provided is a SECRET / service_role key" | The wrong key was pasted | Replace it with the `sb_publishable_` key. Then in Supabase, delete that secret key and create a new one, since it has been pasted somewhere it should not be |
 | "That email or password is not correct" with the right password | `ALLOWED_EMAIL` does not match the Supabase user's email | Make them identical, including spelling |
-| "A database table is missing" | A migration was not run | Repeat step A2. All five files are needed, in number order |
-| "The database refused this request (permission denied)" | A migration only partly ran | Run all five files again in order; it is safe to repeat |
+| "A database table is missing" | A migration was not run | Repeat step A2. All six files are needed, in number order |
+| "The database refused this request (permission denied)" | A migration only partly ran | Run all six files again in order; it is safe to repeat |
 | No bar of buttons at the bottom on iPhone | The phone layout needs adjusting | Use the **>** arrow at the top left to open the menu, and send me a screenshot |
 | A timer was left running overnight | You forgot to stop it | The banner asks for the minutes you actually worked, or click **Discard this timer** |
 | "Could not reach the database" or "Could not reach Supabase" | The Supabase project is paused after a quiet week, or there is no internet | Supabase dashboard → your project → **Resume project** |

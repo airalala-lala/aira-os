@@ -30,15 +30,11 @@ MODULES = [
         "icon": ":material/fitness_center:",
         "path": "views/fitness.py",
         "phase": "Phase 3",
-        "built": False,
-        "summary": "Weight tracker, workout logger, strength progression "
-        "and a weekly training planner.",
+        "built": True,
+        "summary": "Workout logger, strength progress and personal bests, "
+        "weight trend and a weekly training plan.",
         "planned": [
-            "Weight tracker with trend, moving average and goal line",
-            "Workout logger with individual sets, original units kept",
-            "Strength progression and personal bests by exercise",
-            "Weekly planner for strength, rowing, swimming and recovery",
-            "Optional nutrition and habit tracking",
+            "Optional meal, protein, hydration and habit tracking",
         ],
     },
     {

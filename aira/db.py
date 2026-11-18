@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from datetime import date
 
-from aira import literature
+from aira import fitness, literature
 from aira.planning import AREAS, PRIORITIES, TIME_CATEGORIES
 from aira.supabase_client import get_client
 from aira.timeutil import parse_date, today_kl, utc_now_iso
@@ -292,14 +292,184 @@ def add_workout(
     }))
 
 
-def set_workout_status(workout_id: str, status: str) -> None:
+def set_workout_status(workout_id: str, status: str, workout_date: date | None = None) -> None:
     if status not in ("planned", "completed", "skipped"):
         raise DataError("Unknown workout status.")
+    if status == "completed" and workout_date and workout_date > today_kl():
+        raise DataError("A workout planned for a future day can be marked done on that day.")
     _run(get_client().table("workouts").update({"status": status}).eq("id", workout_id))
 
 
 def delete_workout(workout_id: str) -> None:
     _run(get_client().table("workouts").delete().eq("id", workout_id))
+
+
+# ----------------------------------------------------------------- fitness
+
+
+def list_all_workouts() -> list[dict]:
+    rows = _run(get_client().table("workouts").select("*"))
+    return sorted(rows, key=lambda r: (r.get("workout_date") or "", r.get("created_at") or ""), reverse=True)
+
+
+def list_sets() -> list[dict]:
+    return _run(get_client().table("strength_sets").select("*"))
+
+
+def list_cardio() -> list[dict]:
+    return _run(get_client().table("cardio_entries").select("*"))
+
+
+def _clean_workout(workout_date: date, kind: str, status: str, duration_min=None,
+                   location: str = "", notes: str = "", rpe=None) -> dict:
+    if workout_date is None:
+        raise DataError("Please choose the date.")
+    if kind not in fitness.WORKOUT_KINDS:
+        raise DataError("Unknown workout type.")
+    if status not in ("planned", "completed", "skipped"):
+        raise DataError("Unknown workout status.")
+    if status == "completed" and workout_date > today_kl():
+        raise DataError("A completed workout cannot be in the future. Choose Planned instead.")
+    if duration_min is not None and not 1 <= int(duration_min) <= 600:
+        raise DataError("Duration must be between 1 and 600 minutes.")
+    if rpe is not None and not 1 <= float(rpe) <= 10:
+        raise DataError("Effort (RPE) must be between 1 and 10.")
+    return {
+        "workout_date": workout_date.isoformat(),
+        "kind": kind,
+        "status": status,
+        "duration_min": int(duration_min) if duration_min else None,
+        "location": (location or "").strip() or None,
+        "notes": (notes or "").strip() or None,
+        "rpe": float(rpe) if rpe is not None else None,
+    }
+
+
+def _set_payload(row: dict) -> dict:
+    return {k: row[k] for k in (
+        "position", "exercise_name", "set_number", "reps", "load_value",
+        "load_unit", "load_basis", "rpe", "notes",
+    )}
+
+
+def _cardio_payload(row: dict) -> dict:
+    return {k: row[k] for k in (
+        "position", "activity", "distance_m", "duration_seconds",
+        "duration_approximate", "settings_text", "notes",
+    )}
+
+
+def log_workout(header: dict, sets: list[dict], cardio: list[dict]) -> str:
+    """Save a workout with its sets and cardio entries.
+    If any part fails, the whole workout is removed again so nothing half-saved remains."""
+    payload = _clean_workout(**header)
+    created = _run(get_client().table("workouts").insert(payload))
+    if not created:
+        raise DataError("The workout could not be saved. Please try again.")
+    workout_id = created[0]["id"]
+    try:
+        if sets:
+            _run(get_client().table("strength_sets").insert(
+                [{**_set_payload(r), "workout_id": workout_id} for r in sets]))
+        if cardio:
+            _run(get_client().table("cardio_entries").insert(
+                [{**_cardio_payload(r), "workout_id": workout_id} for r in cardio]))
+    except DataError:
+        try:
+            delete_workout(workout_id)  # undo the half-saved workout
+        except DataError:
+            pass
+        raise
+    return workout_id
+
+
+def update_workout(workout_id: str, header: dict) -> None:
+    _run(get_client().table("workouts").update(_clean_workout(**header)).eq("id", workout_id))
+
+
+def move_workout(workout_id: str, new_date: date, status: str) -> None:
+    if new_date is None:
+        raise DataError("Please choose the new date.")
+    if status == "completed" and new_date > today_kl():
+        raise DataError("A completed workout cannot be moved into the future.")
+    _run(get_client().table("workouts").update({"workout_date": new_date.isoformat()}).eq("id", workout_id))
+
+
+def save_workout_details(workout_id: str, sets: list[dict], original_sets: list[dict],
+                         cardio: list[dict], original_cardio: list[dict]) -> None:
+    """Apply edits to a workout's sets and cardio: update changed rows, add new
+    rows, delete removed rows. Imported rows keep their import key."""
+    for table, rows, original, shape in (
+        ("strength_sets", sets, original_sets, _set_payload),
+        ("cardio_entries", cardio, original_cardio, _cardio_payload),
+    ):
+        inserts, updates, deletes = fitness.diff_rows(rows, original)
+        for row in updates:
+            _run(get_client().table(table).update(shape(row)).eq("id", row["id"]))
+        if inserts:
+            _run(get_client().table(table).insert([{**shape(r), "workout_id": workout_id} for r in inserts]))
+        for row_id in deletes:
+            _run(get_client().table(table).delete().eq("id", row_id))
+
+
+def list_weights() -> list[dict]:
+    rows = _run(get_client().table("body_measurements").select("*"))
+    return sorted(rows, key=lambda r: r.get("measured_on") or "", reverse=True)
+
+
+def _clean_weight(measured_on: date, weight_kg, waist_cm=None, hip_cm=None, notes: str = "") -> dict:
+    if measured_on is None:
+        raise DataError("Please choose the date.")
+    if measured_on > today_kl():
+        raise DataError("A measurement cannot be dated in the future.")
+    if weight_kg is None and waist_cm is None and hip_cm is None:
+        raise DataError("Please enter at least one measurement.")
+    if weight_kg is not None and not 20 < float(weight_kg) < 400:
+        raise DataError("Please check the weight.")
+    for label, value in (("waist", waist_cm), ("hip", hip_cm)):
+        if value is not None and not 30 < float(value) < 250:
+            raise DataError(f"Please check the {label} measurement.")
+    return {
+        "measured_on": measured_on.isoformat(),
+        "weight_kg": round(float(weight_kg), 2) if weight_kg is not None else None,
+        "waist_cm": round(float(waist_cm), 1) if waist_cm is not None else None,
+        "hip_cm": round(float(hip_cm), 1) if hip_cm is not None else None,
+        "notes": (notes or "").strip() or None,
+    }
+
+
+def add_weight(measured_on: date, weight_kg, waist_cm=None, hip_cm=None, notes: str = "") -> None:
+    _run(get_client().table("body_measurements").insert(
+        _clean_weight(measured_on, weight_kg, waist_cm, hip_cm, notes)))
+
+
+def update_weight(entry_id: str, measured_on: date, weight_kg, waist_cm=None, hip_cm=None, notes: str = "") -> None:
+    _run(get_client().table("body_measurements").update(
+        _clean_weight(measured_on, weight_kg, waist_cm, hip_cm, notes)).eq("id", entry_id))
+
+
+def delete_weight(entry_id: str) -> None:
+    _run(get_client().table("body_measurements").delete().eq("id", entry_id))
+
+
+def goal_weight() -> dict | None:
+    """The fitness goal measured in kg (for example 'Reach goal weight: 50 kg'), if recorded."""
+    rows = _run(get_client().table("goals").select("*").eq("module", "fitness").eq("unit", "kg"))
+    rows = [r for r in rows if r.get("target_value") is not None and r.get("status") == "active"]
+    return rows[0] if rows else None
+
+
+def set_goal_weight(value) -> None:
+    if value is None or not 30 < float(value) < 300:
+        raise DataError("Please check the goal weight.")
+    current = goal_weight()
+    if current:
+        _run(get_client().table("goals").update({"target_value": float(value)}).eq("id", current["id"]))
+    else:
+        _run(get_client().table("goals").insert({
+            "module": "fitness", "title": "Reach goal weight", "status": "active",
+            "target_value": float(value), "unit": "kg",
+        }))
 
 
 # --------------------------------------------------------------- literature
