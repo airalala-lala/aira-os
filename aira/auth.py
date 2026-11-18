@@ -86,11 +86,25 @@ def _try_sign_in(email: str, password: str, settings: Settings) -> str | None:
             )
         if "rate limit" in text or "too many" in text:
             return "Too many attempts. Please wait a few minutes and try again."
-        return (
-            "Could not reach Supabase to sign you in. Check your internet "
-            "connection, and that your Supabase project is not paused. "
-            f"(Technical detail: {type(exc).__name__})"
-        )
+        if "api key" in text or "apikey" in text:
+            return (
+                "Supabase did not accept the app's key. In Streamlit, open the "
+                "app's Settings, then Secrets, and check SUPABASE_URL and "
+                "SUPABASE_PUBLISHABLE_KEY both come from the same Supabase project."
+            )
+        if "logins are disabled" in text or "provider is disabled" in text:
+            return (
+                "Email sign-in is switched off in Supabase. Open Authentication, "
+                "then Sign In / Providers, and turn the Email provider back on. "
+                "Only 'Allow new users to sign up' should be off."
+            )
+        if "fetch" in text or "connect" in text or "timed out" in text or "name or service" in text:
+            return (
+                "Could not reach Supabase. Check your internet connection, and "
+                "that your Supabase project is not paused."
+            )
+        detail = str(getattr(exc, "message", "") or exc)[:200]
+        return f"Supabase refused the sign-in. Its message was: {detail}"
 
     session = getattr(result, "session", None)
     user = getattr(result, "user", None)
