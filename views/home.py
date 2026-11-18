@@ -201,18 +201,16 @@ def _top3(data: dict, picks: list[dict]) -> None:
                 f'<div style="margin-top:0.35rem">{_task_badges(task, today, source)}</div>',
                 unsafe_allow_html=True,
             )
-            col1, col2, col3 = st.columns(3)
-            with col1:
+            # One row of buttons that stays a row on a phone.
+            with st.container(horizontal=True, gap="small"):
                 if st.button("Done", key=f"top_done_{task['id']}", type="primary"):
                     _act(lambda t=task: db.set_task_status(t["id"], "done"), "Marked as done.")
-            with col2:
                 if pick["source"] == "pinned":
                     if st.button("Unpin", key=f"top_unpin_{task['id']}"):
                         _act(lambda t=task: db.pin_task(t["id"], None), "Unpinned.")
                 else:
                     if st.button("Pin", key=f"top_pin_{task['id']}"):
                         _act(lambda t=task: db.pin_task(t["id"], today), "Pinned to today.")
-            with col3:
                 if st.button("Not today", key=f"top_skip_{task['id']}"):
                     _act(
                         lambda t=task: db.snooze_tasks([t["id"]], today + timedelta(days=1)),
@@ -538,12 +536,10 @@ def main() -> None:
     if not restart:
         _all_tasks(data)
         st.write("")
-        col1, col2 = st.columns(2)
-        with col1:
+        with st.container(horizontal=True, gap="small"):
             if st.button("Restart today", icon=":material/restart_alt:", key="restart_enter"):
                 st.session_state["_restart_on"] = True
                 st.rerun()
-        with col2:
             if st.button("Refresh", icon=":material/refresh:", key="refresh"):
                 st.rerun()
     st.caption("Connected to your database. This page shows only what you have recorded.")

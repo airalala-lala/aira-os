@@ -159,7 +159,7 @@ _CSS = """
         width: 100% !important; max-width: 100% !important;
         background: var(--aira-card); border-top: 1px solid var(--aira-line);
         /* Right side kept clear for the Streamlit Cloud buttons in the corner */
-        padding: 0.35rem 7.5rem calc(0.35rem + env(safe-area-inset-bottom)) 0.25rem;
+        padding: 0.35rem 7.5rem calc(0.35rem + env(safe-area-inset-bottom)) 0.25rem !important;
     }
     .st-key-bottomnav > div { flex: 1 1 0 !important; min-width: 0 !important; width: auto !important; }
     .st-key-bottomnav a {
