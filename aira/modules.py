@@ -77,13 +77,12 @@ MODULES = [
         "icon": ":material/public:",
         "path": "views/opportunities.py",
         "phase": "Phase 6",
-        "built": False,
+        "built": True,
         "summary": "Application tracker and a conference and symposium radar, "
         "entered by hand from official sources.",
         "planned": [
-            "Application tracker with status, documents and follow-up dates",
-            "Conference and symposium radar with official links",
-            "Each deadline stored with its source and the date you verified it",
+            "Required-documents checklist per application",
+            "Contacts and follow-up dates",
         ],
     },
     {

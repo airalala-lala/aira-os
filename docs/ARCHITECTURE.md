@@ -1,6 +1,6 @@
 # AIRA OS 2.0: architecture and plan
 
-Version 2.2 · updated 18 November 2026 · Phase 1 and Phase 2a deployed and tested; Phase 3 (Fitness Studio) built.
+Version 2.3 · updated 18 November 2026 · Phases 1, 2a and 3 deployed; Phase 6 (Global Opportunities) built.
 
 **Purpose:** help Aira protect her priorities, regain consistency and make meaningful progress without feeling overwhelmed. The app should make the next good action obvious, take under two minutes a day, and still be useful when it is only opened a few times a week.
 
@@ -13,7 +13,7 @@ Inspected before building: the version 0.2 project (login, a simple task list, b
 | Modules | Five, including a Personal Planner | Six: PhD Research Hub, Fitness Studio, Business & Boundaries, Weekly Life Review, Global Opportunities, Creator Lab. The planner's job moved into the home page and the Weekly Life Review |
 | Home page | Task list and counts | Daily command centre: Top 3, focus today, timer, weekly progress, Restart mode |
 | Look | Light only, teal | Ivory, sage, muted teal, dusty rose and gold; light and dark; bottom bar on phones |
-| Database | Migrations 0001 to 0003 | Adds 0004 (command centre), 0005 (PhD Hub) and 0006 (Fitness Studio). Earlier files are unchanged, and none changes an existing record |
+| Database | Migrations 0001 to 0003 | Adds 0004 (command centre), 0005 (PhD Hub), 0006 (Fitness Studio) and 0007 (Global Opportunities). Earlier files are unchanged, and none changes an existing record |
 | Tests | None in the project | `tests/test_core.py` |
 
 ## 2. Stack decision
@@ -61,6 +61,7 @@ aira-os/
 │   ├── importer.py             Parses and validates import files; blocks duplicates
 │   ├── literature.py           DOI cleaning, duplicate keys, Excel matrix reader
 │   ├── fitness.py              Set cleaning, personal bests, weekly counts, weight average (no database)
+│   ├── opportunities.py        Stages, days left, closing-soon grouping (no database)
 │   ├── timeutil.py             Asia/Kuala_Lumpur date and time helpers
 │   ├── modules.py              The six modules and the phone bottom bar
 │   └── ui.py                   Colours, cards, meters, empty states
@@ -70,9 +71,10 @@ aira-os/
 │   ├── import_data.py          Upload, preview and import
 │   ├── phd.py                  PhD Research Hub (Overview, Literature, Supervision, Timeline)
 │   ├── fitness.py              Fitness Studio (Overview, Log, Progress, Weight, Plan)
-│   └── business.py, review.py, opportunities.py, creator.py
+│   ├── opportunities.py        Global Opportunities (Closing soon, Applied, Watch list, Past)
+│   └── business.py, review.py, creator.py
 ├── supabase/
-│   ├── migrations/             0001 to 0006, run in order, never edited after use
+│   ├── migrations/             0001 to 0007, run in order, never edited after use
 │   └── verify_security.sql     Read-only check of RLS and grants
 ├── tests/test_core.py          Basic tests
 └── docs/ARCHITECTURE.md        This document
@@ -87,7 +89,7 @@ aira-os/
 - Row Level Security on, four "own rows only" policies, access granted to `authenticated` only and nothing to `anon`.
 - `check` lists on status fields; `import_key` with a uniqueness rule on tables that accept imports.
 
-### Built now (migrations 0001 to 0006)
+### Built now (migrations 0001 to 0007)
 
 | Table | Purpose | Key columns |
 |---|---|---|
@@ -99,7 +101,7 @@ aira-os/
 | `research_phases` | The three phases of the PhD | `position`, `title`, `description`, `status` |
 | `supervisor_feedback` | Feedback items | `received_period`, `received_on`, `item`, `status` |
 | `thesis_milestones` | Prospectus to graduation | `position`, `title`, `due_date`, `status`, `completed_on` |
-| `opportunities` | Applications and opportunities | `kind`, `title`, `organisation`, `url`, `deadline`, `deadline_source_url`, `stage`, `outcome` |
+| `opportunities` | Conferences, summer schools, scholarships, applications | `kind`, `title`, `organisation`, `location`, `event_start`, `event_end`, `url`, `deadline`, `deadline_source_url` (required whenever a deadline is set), `fit`, `next_step`, `stage`, `applied_on`, `verified_on`, `outcome`, `notes` |
 | `body_measurements` | Weight and optional measurements | `measured_on`, `weight_kg`, `waist_cm`, `hip_cm`, `notes` (at least one measurement per row) |
 | `workouts` | One session, planned, completed or skipped | `workout_date`, `kind`, `status`, `duration_min`, `location`, `rpe` (session effort 1 to 10), `notes` |
 | `strength_sets` | One row per set | `workout_id`, `exercise_name`, `set_number`, `reps`, `load_value`, `load_unit` (kg, lb, machine_units), `load_basis` (total, per_side, per_dumbbell), `load_text` (original wording), `rpe` |
@@ -119,7 +121,7 @@ How the tables requested in the brief map onto this design: *Users* → `auth.us
 | 8 Polish | optional `habit_logs` and `meal_logs` (meals, protein estimates, hydration) | No diagnoses, no invented precision |
 | 4 Business | `tasks` gains `delegated_to`, `waiting_on`; `day_closures` (End Business Day) | Time comes from `time_entries` |
 | 5 Review | `weekly_reviews` (week start, six answers, next week's top three, saved summary) | One per week |
-| 6 Opportunities | `opportunities` gains eligibility, required documents, contact, follow-up date; `events` (conference radar: organiser, location, dates, abstract and registration deadlines, fees, funding, official URL, verification date, status) | Deadlines require a source link |
+| 6b Opportunities | required-documents checklist, contacts and follow-up dates | Conference details live on `opportunities` (0007) |
 | 7 Creator | `content_items`, `content_scripts`, `content_metrics` | Metrics entered by hand |
 
 ## 5. Authentication and access control
@@ -160,7 +162,7 @@ Both devices read the same database, so there is nothing to synchronise. A recor
 | **4. Business & Boundaries** | Business task list with delegation and waiting-on, time summaries, allocation across areas, End Business Day | The weekly limit warning is driven by a full week of real logs |
 | *Checkpoint* | Test persistence across sessions and devices; revisit the stack decision | |
 | **5. Weekly Life Review** | Six questions, summary from recorded data, saved reflections, week comparison | A Sunday review takes under ten minutes |
-| **6. Global Opportunities** | Application tracker, conference and symposium radar, entered by hand | Every deadline shows its source and verification date |
+| **6. Global Opportunities** (built) | Closing soon with days left, Applied, Watch list and Past tabs; Preparing, Applied, Interview, Accepted, Not successful and Not pursuing buttons; deadlines within 14 days on Home; add, edit, delete; 13 researched opportunities ready to import | README Part H passes |
 | **7. Creator Lab** | Idea bank, scripts, production status, calendar, manual metrics | A video can be followed from idea to published |
 | **8. Polish** | Nutrition and habits, search, one-click restore, optional MFA and "remember this device", live opportunity discovery only if a legitimate source is configured and tested | |
 
@@ -176,7 +178,8 @@ Both devices read the same database, so there is nothing to synchronise. A recor
 | **Import data** | Preview split into new and already stored | Import only what is new, after ticking a confirmation |
 | **PhD Research Hub** (Phase 2a) | Overview (counts, research phases); Literature (search, filters, table, source detail with evidence kept apart from my thinking); Supervision (feedback checklist, meetings, action items); Timeline (milestones, chart, semester dates) | Add, edit, delete and import sources; mark read today; record meetings and action items; set planned and actual milestone dates |
 | **Fitness Studio** (Phase 3) | Overview (this week, last workout, last recorded weight, consistency); Log (session and set tables, repeat, past workouts); Progress (chart, history, personal bests, rowing, swimming); Weight (chart, entries, goal); Plan (this or next week, day by day) | Log, edit and delete workouts and sets; add, edit and delete measurements; plan, move, skip and complete sessions |
-| **Other four module pages** | "Not built yet" with the planned features | Nothing yet |
+| **Global Opportunities** (Phase 6) | Closing-soon warning; four tabs of cards with days left, place and dates, fit, next step, official link and checked-on date | Change status with one tap; add, edit and delete |
+| **Other three module pages** | "Not built yet" with the planned features | Nothing yet |
 
 Navigation: sidebar on desktop; on a phone, the same menu plus a bottom bar (Home, PhD, Fitness, Business, Review).
 
@@ -189,7 +192,6 @@ Navigation: sidebar on desktop; on a phone, the same menu plus a bottom bar (Hom
 | **PhD · POL500 and weekly plan** | Assignments, readings, deadlines; weekly targets, blockers, reflection |
 | **Business** | Task list, time this week against the limit, allocation across areas, End Business Day |
 | **Weekly Review** | Six questions, the week's recorded numbers, past weeks |
-| **Opportunities** | Application tracker; conference radar with official links |
 | **Creator Lab** | Idea bank, pipeline, calendar |
 
 ## 10. How the home page decides things
@@ -237,4 +239,12 @@ Navigation: sidebar on desktop; on a phone, the same menu plus a bottom bar (Hom
 - **Weekly plan.** A saved weekly template (in `module_settings`, `fitness / weekly_template`) says which session falls on which weekday: Strength A, Strength B, Rowing, Swimming (breaststroke) or Recovery. The first suggestion follows the weekly workout target (3 by default: Monday Strength A, Wednesday swimming, Friday Strength B). Each week, sessions from today onward are added as planned workouts with their sets and cardio, keyed `plan:<monday>:<weekday>` so they are never added twice. A session that was removed is not added again (`fitness / plan_keys_added`).
 - Planned loads are copied from the most recent recorded set of the same exercise name. An exercise never recorded gets no load, and a load recorded only as text (for example "9–10 kg") is shown as a note. Ticking **Done** records the session exactly as planned; differences are edited afterwards in the Log tab. Planned sets do not count towards progress or personal bests until ticked.
 - Editing a workout updates changed sets, adds new ones and deletes removed ones. Imported sets keep their import key, so re-importing the seed files never duplicates them.
+
+## 15. Opportunity rules
+
+- An opportunity is "closing soon" when it is still open (Interested, Preparing or Status not confirmed) and its recorded deadline is 0 to 14 days away. It then appears on Home too.
+- **Applied** sets the stage to `submitted` and records today as `applied_on`; it never changes the deadline.
+- Without a recorded deadline an opportunity sits on the Watch list and is never shown as urgent.
+- The database refuses a deadline without a `deadline_source_url`.
+- The 13 opportunities in `07_opportunities_2027.json` were researched on 18 November 2026; see the doc "Global Opportunities 2027: deadline plan" for the reasoning and sources. AIRA OS does not search the web by itself.
 

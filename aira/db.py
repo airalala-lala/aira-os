@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from datetime import date, timedelta
 
-from aira import fitness, literature
+from aira import fitness, literature, opportunities
 from aira.planning import AREAS, PRIORITIES, TIME_CATEGORIES
 from aira.supabase_client import get_client
 from aira.timeutil import parse_date, today_kl, utc_now_iso
@@ -735,6 +735,63 @@ def update_milestone(milestone_id, title, planned, status, actual, notes) -> Non
 
 def delete_milestone(milestone_id: str) -> None:
     _run(get_client().table("thesis_milestones").delete().eq("id", milestone_id))
+
+
+# ------------------------------------------------------------ opportunities
+
+
+def list_opportunities() -> list[dict]:
+    return _run(get_client().table("opportunities").select("*"))
+
+
+def _clean_opportunity(f: dict) -> dict:
+    title = (f.get("title") or "").strip()
+    if not title:
+        raise DataError("Please give the opportunity a name.")
+    kind = f.get("kind") or "unspecified"
+    if kind not in opportunities.KINDS:
+        raise DataError("Unknown type.")
+    stage = f.get("stage") or "interested"
+    if stage not in opportunities.STAGES:
+        raise DataError("Unknown status.")
+    deadline, start, end = f.get("deadline"), f.get("event_start"), f.get("event_end")
+    source = (f.get("deadline_source_url") or "").strip()
+    if deadline and not source:
+        raise DataError("Please add the link where you found the deadline, so it can be checked again.")
+    if start and end and end < start:
+        raise DataError("The event ends before it starts.")
+    clean = lambda v: (str(v).strip() or None) if v is not None else None
+    iso = lambda d: d.isoformat() if d else None
+    return {
+        "title": title, "kind": kind, "stage": stage,
+        "organisation": clean(f.get("organisation")), "location": clean(f.get("location")),
+        "url": clean(f.get("url")), "deadline": iso(deadline), "deadline_source_url": source or None,
+        "event_start": iso(start), "event_end": iso(end),
+        "fit": clean(f.get("fit")), "next_step": clean(f.get("next_step")),
+        "notes": clean(f.get("notes")), "outcome": clean(f.get("outcome")),
+        "verified_on": iso(f.get("verified_on")),
+    }
+
+
+def add_opportunity(fields: dict) -> None:
+    _run(get_client().table("opportunities").insert(_clean_opportunity(fields)))
+
+
+def update_opportunity(opp_id: str, fields: dict) -> None:
+    _run(get_client().table("opportunities").update(_clean_opportunity(fields)).eq("id", opp_id))
+
+
+def set_opportunity_stage(opp_id: str, stage: str) -> None:
+    if stage not in opportunities.STAGES:
+        raise DataError("Unknown status.")
+    payload = {"stage": stage}
+    if stage == "submitted":
+        payload["applied_on"] = today_kl().isoformat()
+    _run(get_client().table("opportunities").update(payload).eq("id", opp_id))
+
+
+def delete_opportunity(opp_id: str) -> None:
+    _run(get_client().table("opportunities").delete().eq("id", opp_id))
 
 
 # ------------------------------------------------------------------ import

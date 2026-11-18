@@ -22,7 +22,7 @@ import re
 from dataclasses import dataclass, field
 from datetime import date
 
-from aira import literature
+from aira import literature, opportunities
 from aira.timeutil import today_kl
 
 MODULES = [
@@ -53,6 +53,8 @@ SPECS: dict[str, dict[str, str]] = {
         "import_key": "str", "kind": "str", "title": "str!", "organisation": "str",
         "country": "str", "target_year": "int", "url": "str", "deadline": "date",
         "deadline_source_url": "str", "stage": "str", "outcome": "str", "notes": "str",
+        "location": "str", "event_start": "date", "event_end": "date", "fit": "str",
+        "next_step": "str", "verified_on": "date",
     },
     "body_measurements": {
         "import_key": "str", "measured_on": "date!", "weight_kg": "num!", "notes": "str",
@@ -93,15 +95,8 @@ ALLOWED: dict[str, dict[str, list[str]]] = {
     "supervisor_feedback": {"status": ["open", "addressed"]},
     "thesis_milestones": {"status": ["planned", "in_progress", "completed"]},
     "opportunities": {
-        "kind": [
-            "unspecified", "application", "internship_or_attachment",
-            "visiting_researcher", "conference_or_symposium",
-            "scholarship_or_fellowship", "funding", "collaboration",
-        ],
-        "stage": [
-            "status_unconfirmed", "interested", "preparing", "submitted",
-            "interview", "accepted", "rejected", "withdrawn", "closed",
-        ],
+        "kind": opportunities.KINDS,
+        "stage": opportunities.STAGES,
     },
     "literature_sources": {
         "reading_status": literature.READING_STATUSES,

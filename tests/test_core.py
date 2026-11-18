@@ -10,7 +10,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from aira import fitness, importer, literature, planning, timeutil  # noqa: E402
+from aira import fitness, importer, literature, opportunities, planning, timeutil  # noqa: E402
 
 TODAY = date(2026, 11, 17)  # a Tuesday
 
@@ -331,6 +331,40 @@ class FitnessTests(unittest.TestCase):
         self.assertEqual((len(pull), pull[0]["load_value"], pull[0]["reps"]), (3, 32, 10))
         back = [x for x in plan_sets if x["exercise_name"] == "Back extension"]
         self.assertIsNone(back[0]["load_value"])  # never recorded, so no load is invented
+
+
+
+class OpportunityTests(unittest.TestCase):
+    OPPS = [
+        {"id": "a", "title": "Soon", "stage": "preparing", "deadline": "2026-11-30"},
+        {"id": "b", "title": "Later", "stage": "interested", "deadline": "2027-01-31"},
+        {"id": "c", "title": "No date", "stage": "interested", "deadline": None},
+        {"id": "d", "title": "Done", "stage": "submitted", "deadline": "2026-11-20"},
+        {"id": "e", "title": "Missed", "stage": "interested", "deadline": "2026-11-01"},
+        {"id": "f", "title": "Dropped", "stage": "not_pursuing", "deadline": "2026-12-01"},
+    ]
+
+    def test_groups(self):
+        g = opportunities.group(self.OPPS, date(2026, 11, 18))
+        self.assertEqual([o["id"] for o in g["closing"]], ["a", "b"])
+        self.assertEqual([o["id"] for o in g["applied"]], ["d"])
+        self.assertEqual([o["id"] for o in g["watch"]], ["c"])
+        self.assertEqual({o["id"] for o in g["past"]}, {"e", "f"})
+
+    def test_closing_soon_ignores_applied_and_undated(self):
+        soon = opportunities.closing_soon(self.OPPS, date(2026, 11, 18))
+        self.assertEqual([o["id"] for o in soon], ["a"])
+
+    def test_countdown(self):
+        today = date(2026, 11, 18)
+        self.assertEqual(opportunities.countdown({"deadline": "2026-11-30"}, today), "12 days left")
+        self.assertEqual(opportunities.countdown({"deadline": "2026-11-18"}, today), "Closes today")
+        self.assertEqual(opportunities.countdown({"deadline": None}, today), "Deadline not published")
+
+    def test_import_needs_a_source_for_every_deadline(self):
+        csv = b"title,deadline,deadline_source_url\nWith source,2027-01-31,https://example.org\nNo source,2027-01-31,\n"
+        rows, problems = importer.parse_files({"opportunities.csv": csv}, date(2026, 11, 18))
+        self.assertEqual((len(rows["opportunities"]), len(problems)), (1, 1))
 
 
 if __name__ == "__main__":

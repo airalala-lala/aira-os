@@ -18,6 +18,7 @@ from datetime import timedelta
 import streamlit as st
 
 from aira import db, planning, ui
+from aira import opportunities as opp_logic
 from aira.planning import AREA_LABELS, AREAS, PRIORITIES, PRIORITY_LABELS, TIME_CATEGORIES
 from aira.timeutil import (
     due_label,
@@ -67,6 +68,28 @@ def _fill_plan(today) -> None:
         pass  # the Fitness Studio shows any problem; Home stays usable
 
 
+def _opportunities():
+    try:
+        return db.list_opportunities()
+    except db.DataError:
+        return []
+
+
+def _deadlines(data: dict) -> None:
+    """Opportunities closing within two weeks that you have not applied for yet."""
+    soon = opp_logic.closing_soon(data["opportunities"], data["today"])
+    if not soon:
+        return
+    ui.section("Deadlines coming up")
+    for o in soon:
+        st.markdown(
+            f'{ui.badge(opp_logic.countdown(o, data["today"]), "rose" if opp_logic.days_left(o, data["today"]) <= 7 else "gold")} '
+            f'{html.escape(o["title"])}',
+            unsafe_allow_html=True,
+        )
+    st.page_link("views/opportunities.py", label="Open Global Opportunities", icon=":material/public:")
+
+
 def _load() -> dict:
     today = today_kl()
     since = today - timedelta(days=60)
@@ -80,6 +103,7 @@ def _load() -> dict:
             "running": db.running_timer(),
             "workouts": db.list_workouts(since),
             "sources_read": _sources_read(since),
+            "opportunities": _opportunities(),
             "targets": db.get_setting("general", "weekly_targets", {}) or {},
         }
     except db.DataError as exc:
@@ -559,6 +583,7 @@ def main() -> None:
     else:
         _top3(data, picks)
 
+    _deadlines(data)
     _focus_today(data, picks)
     _this_week(data)
 

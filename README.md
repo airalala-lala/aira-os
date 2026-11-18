@@ -38,7 +38,7 @@ Use a brand-new project for AIRA OS. Do not reuse a project that holds anything 
 
 ### A2. Create the database tables
 
-There are six SQL files in the `supabase/migrations` folder. Run them **in number order**, one at a time.
+There are seven SQL files in the `supabase/migrations` folder. Run them **in number order**, one at a time.
 
 1. In the left sidebar, click **SQL Editor**.
 2. Click **New query** (or the **+** button).
@@ -52,6 +52,7 @@ There are six SQL files in the `supabase/migrations` folder. Run them **in numbe
    - `0004_command_centre.sql`
    - `0005_phd_hub.sql`
    - `0006_fitness_studio.sql`
+   - `0007_global_opportunities.sql`
 
 Every file is safe to run more than once. If you ever re-run an older file, run the later ones again afterwards too, in order.
 
@@ -251,6 +252,33 @@ Upload the whole project to GitHub again, the same way as before, and wait about
 
 Only enter real sessions and measurements. Delete any test entries you make.
 
+## Part H: Global Opportunities (Phase 6)
+
+### H1. Update the database
+
+In Supabase, open **SQL Editor**, then **New query**. Paste the contents of `supabase/migrations/0007_global_opportunities.sql` and click **Run**. You should see **Success. No rows returned**.
+
+### H2. Update the app
+
+Upload the whole project to GitHub again, the same way as before, and wait about two minutes.
+
+### H3. Import the opportunities
+
+1. Open AIRA OS and click **Import data**.
+2. Choose `07_opportunities_2027.json` from the new `aira-os-seed-data` folder.
+3. The preview should show **13 new records**. Tick the box and click **Import**.
+
+### H4. Test it
+
+| # | Do this | You should see |
+|---|---|---|
+| 1 | Open **Global Opportunities** | Four tabs: Closing soon, Applied, Watch list, Past. A yellow note lists deadlines in the next 14 days |
+| 2 | **Closing soon** | Each card shows days left, where and when, fit, next step and an **Official page** button |
+| 3 | On **Home** | A "Deadlines coming up" list for anything closing within 14 days |
+| 4 | Tap **Applied** on something you have really submitted | It moves to the Applied tab with today's date, and leaves the Home reminder |
+| 5 | In **Applied**, tap **Accepted** or **Not successful** when you hear back | It moves to Past |
+| 6 | **Add an opportunity** with a deadline but no source link | "Please add the link where you found the deadline" |
+
 ### Add it to your iPhone Home Screen
 
 In Safari, open the app, tap the **Share** button, then **Add to Home Screen**. It then opens like an app. Let Safari save your password so signing in is one tap.
@@ -264,8 +292,8 @@ In Safari, open the app, tap the **Share** button, then **Add to Home Screen**. 
 | "AIRA OS is not configured yet. Missing settings: …" | The Secrets box is empty or a name is misspelt | Streamlit app **Settings → Secrets**. Paste the three lines again, check the names exactly, **Save** |
 | "The key you provided is a SECRET / service_role key" | The wrong key was pasted | Replace it with the `sb_publishable_` key. Then in Supabase, delete that secret key and create a new one, since it has been pasted somewhere it should not be |
 | "That email or password is not correct" with the right password | `ALLOWED_EMAIL` does not match the Supabase user's email | Make them identical, including spelling |
-| "A database table is missing" | A migration was not run | Repeat step A2. All six files are needed, in number order |
-| "The database refused this request (permission denied)" | A migration only partly ran | Run all six files again in order; it is safe to repeat |
+| "A database table is missing" | A migration was not run | Repeat step A2. All seven files are needed, in number order |
+| "The database refused this request (permission denied)" | A migration only partly ran | Run all seven files again in order; it is safe to repeat |
 | No bar of buttons at the bottom on iPhone | The phone layout needs adjusting | Use the **>** arrow at the top left to open the menu, and send me a screenshot |
 | A timer was left running overnight | You forgot to stop it | The banner asks for the minutes you actually worked, or click **Discard this timer** |
 | "Could not reach the database" or "Could not reach Supabase" | The Supabase project is paused after a quiet week, or there is no internet | Supabase dashboard → your project → **Resume project** |
