@@ -234,5 +234,7 @@ Navigation: sidebar on desktop; on a phone, the same menu plus a bottom bar (Hom
 - The weight line is a 14-day average of the entries actually recorded in that window. Days without an entry are not filled in.
 - The weekly consistency chart counts completed workouts only. Weeks with nothing recorded show no bar.
 - A planned session can only be marked done on or after its day.
+- **Weekly plan.** A saved weekly template (in `module_settings`, `fitness / weekly_template`) says which session falls on which weekday: Strength A, Strength B, Rowing, Swimming (breaststroke) or Recovery. The first suggestion follows the weekly workout target (3 by default: Monday Strength A, Wednesday swimming, Friday Strength B). Each week, sessions from today onward are added as planned workouts with their sets and cardio, keyed `plan:<monday>:<weekday>` so they are never added twice. A session that was removed is not added again (`fitness / plan_keys_added`).
+- Planned loads are copied from the most recent recorded set of the same exercise name. An exercise never recorded gets no load, and a load recorded only as text (for example "9–10 kg") is shown as a note. Ticking **Done** records the session exactly as planned; differences are edited afterwards in the Log tab. Planned sets do not count towards progress or personal bests until ticked.
 - Editing a workout updates changed sets, adds new ones and deletes removed ones. Imported sets keep their import key, so re-importing the seed files never duplicates them.
 

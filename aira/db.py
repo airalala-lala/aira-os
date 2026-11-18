@@ -7,7 +7,7 @@ reads fresh data, which is how your MacBook and iPhone stay in sync.
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, timedelta
 
 from aira import fitness, literature
 from aira.planning import AREAS, PRIORITIES, TIME_CATEGORIES
@@ -359,10 +359,12 @@ def _cardio_payload(row: dict) -> dict:
     )}
 
 
-def log_workout(header: dict, sets: list[dict], cardio: list[dict]) -> str:
+def log_workout(header: dict, sets: list[dict], cardio: list[dict], import_key: str | None = None) -> str:
     """Save a workout with its sets and cardio entries.
     If any part fails, the whole workout is removed again so nothing half-saved remains."""
     payload = _clean_workout(**header)
+    if import_key:
+        payload["import_key"] = import_key
     created = _run(get_client().table("workouts").insert(payload))
     if not created:
         raise DataError("The workout could not be saved. Please try again.")
@@ -410,6 +412,82 @@ def save_workout_details(workout_id: str, sets: list[dict], original_sets: list[
             _run(get_client().table(table).insert([{**shape(r), "workout_id": workout_id} for r in inserts]))
         for row_id in deletes:
             _run(get_client().table(table).delete().eq("id", row_id))
+
+
+# ------------------------------------------------------------- weekly plan
+
+
+def get_plan_template() -> dict | None:
+    return get_setting("fitness", "weekly_template")
+
+
+def save_plan_template(template: dict) -> None:
+    days = template.get("days") or []
+    seen = set()
+    for day in days:
+        if day.get("session") not in fitness.SESSION_TYPES:
+            raise DataError("Unknown session type in the weekly plan.")
+        if not 0 <= int(day.get("weekday", -1)) <= 6:
+            raise DataError("Unknown day in the weekly plan.")
+        if day["weekday"] in seen:
+            raise DataError("Each day can hold one planned session. Please remove the duplicate day.")
+        seen.add(day["weekday"])
+        if day.get("minutes") is not None and not 1 <= int(day["minutes"]) <= 600:
+            raise DataError("Minutes must be between 1 and 600.")
+    set_setting("fitness", "weekly_template", template)
+
+
+def _handled_plan_keys() -> list[str]:
+    return list(get_setting("fitness", "plan_keys_added", []) or [])
+
+
+def fill_week_from_template(monday: date, workouts: list[dict] | None = None,
+                            sets: list[dict] | None = None) -> int:
+    """Add this week's planned sessions from the weekly template (today onward).
+    A session that was added once is never added again, even if you removed it."""
+    template = get_plan_template()
+    if not template:
+        return 0
+    workouts = list_all_workouts() if workouts is None else workouts
+    sets = list_sets() if sets is None else sets
+    handled = _handled_plan_keys()
+    todo = [x for x in fitness.sessions_to_add(template, monday, today_kl(), workouts)
+            if x["key"] not in handled]
+    if not todo:
+        return 0
+    latest = fitness.latest_loads(sets, workouts)
+    for item in todo:
+        spec = fitness.SESSION_TYPES[item["session"]]
+        plan_sets, plan_cardio = fitness.session_details(item["session"], template, latest)
+        header = {"workout_date": item["date"], "kind": spec["kind"], "status": "planned",
+                  "duration_min": item.get("minutes") or spec["minutes"],
+                  "notes": spec["label"] + " · from your weekly plan"}
+        try:
+            log_workout(header, plan_sets, plan_cardio, import_key=item["key"])
+        except DataError:
+            # Already added from another device at the same moment: nothing to do.
+            pass
+        handled.append(item["key"])
+    cutoff = (monday - timedelta(weeks=10)).isoformat()
+    set_setting("fitness", "plan_keys_added", [k for k in handled if k.split(":")[1] >= cutoff])
+    return len(todo)
+
+
+def replan_rest_of_week(monday: date) -> int:
+    """Remove planned (not done or skipped) sessions from your weekly plan for
+    today onward in this week, then add them again from the current template."""
+    today = today_kl()
+    workouts = list_all_workouts()
+    prefix = f"plan:{monday.isoformat()}:"
+    removable = [w for w in workouts if (w.get("import_key") or "").startswith(prefix)
+                 and w.get("status") == "planned" and (parse_date(w.get("workout_date")) or today) >= today]
+    for w in removable:
+        delete_workout(w["id"])
+    keys = {w["import_key"] for w in removable}
+    future_keys = {fitness.plan_key(monday, d) for d in range(7) if monday + timedelta(days=d) >= today}
+    set_setting("fitness", "plan_keys_added",
+                [k for k in _handled_plan_keys() if k not in keys and k not in future_keys])
+    return fill_week_from_template(monday)
 
 
 def list_weights() -> list[dict]:

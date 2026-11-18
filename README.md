@@ -246,7 +246,7 @@ Upload the whole project to GitHub again, the same way as before, and wait about
 | 3 | **Log** tab: open **Repeat a previous session**, choose 31 Oct, tap **Copy into the log below** | The table fills with that session's exercises. Change any reps or loads, then **Save workout** |
 | 4 | **Progress** tab: choose **Precor leg press** | Its history, with loads shown as "kg per side" |
 | 5 | **Personal bests** | One row per exercise and unit. Chest press stays in lb |
-| 6 | **Plan** tab: **Add to the plan** a swimming session tomorrow | It appears on tomorrow's line with **Skip**, **Remove** and **Move**. **Done** appears on the day itself |
+| 6 | **Plan** tab: read the suggested weekly plan and tap **Use this plan** (or **Adjust before using** first) | This week's sessions from today onward appear, each with its exercises and your last recorded loads. Tick **Done** on the day. Next week fills itself when you open it |
 | 7 | Open a past workout in **Log**, switch on **Edit this workout**, change one number, **Save changes** | Only that set changes |
 
 Only enter real sessions and measurements. Delete any test entries you make.

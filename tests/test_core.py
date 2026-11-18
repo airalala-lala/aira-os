@@ -315,5 +315,23 @@ class FitnessTests(unittest.TestCase):
         self.assertEqual(avg[2][1], 66.10)  # nothing else recorded in the 14 days before
 
 
+    def test_weekly_plan_adds_only_today_onward_and_once(self):
+        template = fitness.suggested_template(3)
+        monday = date(2026, 11, 16)
+        todo = fitness.sessions_to_add(template, monday, date(2026, 11, 18), [])
+        self.assertEqual([t["date"] for t in todo], [date(2026, 11, 18), date(2026, 11, 20)])
+        existing = [{"import_key": todo[0]["key"]}]
+        self.assertEqual(len(fitness.sessions_to_add(template, monday, date(2026, 11, 18), existing)), 1)
+
+    def test_planned_loads_come_from_last_recorded_set(self):
+        latest = fitness.latest_loads(SETS, W)
+        self.assertEqual(latest["Lat pulldown"]["load_value"], 32)  # 40 kg was only planned
+        plan_sets, _ = fitness.session_details("strength_a", fitness.suggested_template(3), latest)
+        pull = [x for x in plan_sets if x["exercise_name"] == "Lat pulldown"]
+        self.assertEqual((len(pull), pull[0]["load_value"], pull[0]["reps"]), (3, 32, 10))
+        back = [x for x in plan_sets if x["exercise_name"] == "Back extension"]
+        self.assertIsNone(back[0]["load_value"])  # never recorded, so no load is invented
+
+
 if __name__ == "__main__":
     unittest.main()

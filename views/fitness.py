@@ -37,7 +37,12 @@ def _act(action, message: str) -> None:
 
 def _load() -> dict:
     try:
+        template = db.get_plan_template()
+        if template:
+            # Add this week's sessions from your weekly plan (today onward).
+            db.fill_week_from_template(fitness.week_start(TODAY))
         return {
+            "template": template,
             "workouts": db.list_all_workouts(),
             "sets": db.list_sets(),
             "cardio": db.list_cardio(),
@@ -490,13 +495,167 @@ def _weight(data: dict) -> None:
 # --------------------------------------------------------------------- plan
 
 
+SESSION_LABELS = {k: v["label"] for k, v in fitness.SESSION_TYPES.items()}
+
+
+def _template_editor(base: dict, data: dict, first_time: bool) -> None:
+    """Edit which session falls on which day, and the exercises in each strength session."""
+    by_day = {int(d["weekday"]): d for d in base.get("days") or []}
+    rows = [{"Day": fitness.WEEKDAYS[i],
+             "Session": SESSION_LABELS.get(by_day[i]["session"]) if i in by_day else None,
+             "Minutes": by_day[i].get("minutes") if i in by_day else None} for i in range(7)]
+    st.caption("Leave a day's session empty for a rest day.")
+    days_edit = st.data_editor(rows, hide_index=True, key="tpl_days", column_config={
+        "Day": st.column_config.TextColumn(disabled=True, width="small"),
+        "Session": st.column_config.SelectboxColumn(options=list(SESSION_LABELS.values())),
+        "Minutes": st.column_config.NumberColumn(min_value=1, max_value=600, step=5, width="small"),
+    })
+    sessions = {k: dict(v) for k, v in (base.get("sessions") or {}).items()}
+    for key in ("strength_a", "strength_b"):
+        st.markdown(f"**{SESSION_LABELS[key]} exercises**")
+        current = (sessions.get(key) or fitness.SESSION_TYPES[key]).get("exercises") or []
+        edited = st.data_editor(
+            [{"Exercise": e.get("name"), "Sets": e.get("sets"), "Reps": e.get("reps")} for e in current],
+            num_rows="dynamic", hide_index=True, key=f"tpl_{key}", column_config={
+                "Exercise": st.column_config.TextColumn(help="Use the same name as in your log, so the last load is found."),
+                "Sets": st.column_config.NumberColumn(min_value=1, max_value=10, step=1, width="small"),
+                "Reps": st.column_config.NumberColumn(min_value=1, max_value=100, step=1, width="small"),
+            })
+        sessions.setdefault(key, {"cardio": fitness.SESSION_TYPES[key]["cardio"]})
+        sessions[key]["exercises"] = [
+            {"name": str(r["Exercise"]).strip(), "sets": int(r["Sets"] or 3), "reps": int(r["Reps"]) if r.get("Reps") == r.get("Reps") and r.get("Reps") else None}
+            for r in _records(edited) if r.get("Exercise") and str(r["Exercise"]).strip() and r.get("Exercise") == r.get("Exercise")
+        ]
+    st.caption("Loads are filled in from the last time you recorded each exercise.")
+
+    label_to_key = {v: k for k, v in SESSION_LABELS.items()}
+    new_days = []
+    for i, r in enumerate(_records(days_edit)):
+        label = r.get("Session")
+        if label and label == label and label in label_to_key:
+            minutes = r.get("Minutes")
+            minutes = int(minutes) if minutes and minutes == minutes else fitness.SESSION_TYPES[label_to_key[label]]["minutes"]
+            new_days.append({"weekday": i, "session": label_to_key[label], "minutes": minutes})
+    template = {"days": new_days, "sessions": {**{k: {"exercises": [dict(e) for e in v["exercises"]],
+                                                       "cardio": [dict(c) for c in v["cardio"]]}
+                                                   for k, v in fitness.SESSION_TYPES.items()},
+                                                **sessions}}
+    monday = fitness.week_start(TODAY)
+    if first_time:
+        if st.button("Use this as my weekly plan", type="primary", key="tpl_use"):
+            def start():
+                db.save_plan_template(template)
+                db.fill_week_from_template(monday)
+            _act(start, "Weekly plan saved. This week's sessions are ready to tick.")
+    else:
+        with st.container(horizontal=True, gap="small"):
+            if st.button("Save my weekly plan", type="primary", key="tpl_save"):
+                _act(lambda: db.save_plan_template(template),
+                     "Weekly plan saved. It applies to the days not planned yet.")
+            if st.button("Save and update the rest of this week", key="tpl_replan"):
+                def replan():
+                    db.save_plan_template(template)
+                    db.replan_rest_of_week(monday)
+                _act(replan, "Weekly plan saved, and the rest of this week updated.")
+
+
 def _plan(data: dict) -> None:
-    workouts = data["workouts"]
+    workouts, all_sets, all_cardio = data["workouts"], data["sets"], data["cardio"]
+    template = data["template"]
+
+    if not template:
+        target = data["targets"].get("workouts")
+        suggested = fitness.suggested_template(target)
+        latest = fitness.latest_loads(all_sets, workouts)
+        with st.container(border=True):
+            st.markdown(
+                '<div class="aira-card-title">Your weekly plan</div><div class="aira-card-text">'
+                + html.escape(
+                    f"Suggested from your target of {target:g} workouts a week" if target
+                    else "Suggested for 3 workouts a week (set your own target in Settings)")
+                + ". Once you use it, each week's sessions appear here by themselves and you just tick them off. "
+                "Loads come from the last time you recorded each exercise.</div>",
+                unsafe_allow_html=True,
+            )
+            for day in suggested["days"]:
+                spec = fitness.SESSION_TYPES[day["session"]]
+                st.markdown(f"**{fitness.WEEKDAYS[day['weekday']]} · {spec['label']}** · about {day['minutes']} min")
+                plan_sets, plan_cardio = fitness.session_details(day["session"], suggested, latest)
+                lines = [f"{c['activity']}: {c['duration_seconds'] // 60} min" for c in plan_cardio if c.get("duration_seconds")]
+                lines += fitness.prescription(plan_sets)
+                if lines:
+                    st.caption(" · ".join(lines) if len(lines) < 2 else "\n".join(f"- {x}" for x in lines))
+            with st.expander("Adjust before using"):
+                _template_editor(suggested, data, first_time=True)
+            if st.button("Use this plan", type="primary", key="tpl_use_quick"):
+                monday = fitness.week_start(TODAY)
+
+                def start():
+                    db.save_plan_template(suggested)
+                    db.fill_week_from_template(monday)
+                _act(start, "Weekly plan saved. This week's sessions are ready to tick.")
+
     which = st.radio("Week", ["This week", "Next week"], horizontal=True, key="plan_week",
                      label_visibility="collapsed")
     monday = fitness.week_start(TODAY) + timedelta(weeks=1 if which == "Next week" else 0)
+    if template and which == "Next week":
+        try:
+            if db.fill_week_from_template(monday):
+                st.rerun()
+        except db.DataError as exc:
+            st.error(str(exc))
 
-    with st.expander("Add to the plan", icon=":material/add:"):
+    st.caption("Ticking **Done** records the session as planned. If you lifted different weights or reps, "
+               "edit it afterwards in the Log tab.")
+
+    for offset in range(7):
+        day = monday + timedelta(days=offset)
+        items = [w for w in workouts if parse_date(w.get("workout_date")) == day]
+        heading = f"{day:%a} {day.day} {day:%b}" + ("  ·  today" if day == TODAY else "")
+        st.markdown(f"**{heading}**")
+        if not items:
+            st.caption("Rest or free day")
+            continue
+        for w in items:
+            wid = w["id"]
+            status = w.get("status")
+            title = (w.get("notes") or "").replace(" · from your weekly plan", "") or _kind(w)
+            if w.get("duration_min"):
+                title += f" · {w['duration_min']} min"
+            with st.container(border=True):
+                if status == "skipped":
+                    st.markdown(f"{ui.badge('Skipped')} {html.escape(title)}", unsafe_allow_html=True)
+                    if st.button("Undo skip", key=f"pl_unskip_{wid}"):
+                        _act(lambda: db.set_workout_status(wid, "planned"), "Back in the plan.")
+                    continue
+                done = status == "completed"
+                ticked = st.checkbox(f"**{title}**", value=done, key=f"pl_tick_{wid}",
+                                     disabled=day > TODAY and not done,
+                                     help="Can be ticked on the day." if day > TODAY else None)
+                if ticked != done:
+                    _act(lambda: db.set_workout_status(wid, "completed" if ticked else "planned", day),
+                         "Well done. Recorded." if ticked else "Marked as not done.")
+                w_sets = [x for x in all_sets if x.get("workout_id") == wid]
+                w_cardio = [x for x in all_cardio if x.get("workout_id") == wid]
+                lines = [f"{c['activity']}: {c['duration_seconds'] // 60} min" for c in
+                         sorted(w_cardio, key=lambda c: c.get("position") or 0) if c.get("duration_seconds")]
+                lines += fitness.prescription(w_sets)
+                if lines:
+                    st.caption("\n".join(f"- {x}" for x in lines))
+                if status == "planned":
+                    with st.container(horizontal=True, gap="small"):
+                        if st.button("Skip", key=f"pl_skip_{wid}"):
+                            _act(lambda: db.set_workout_status(wid, "skipped"), "Skipped. No problem.")
+                        if st.button("Remove", key=f"pl_del_{wid}"):
+                            _act(lambda: db.delete_workout(wid), "Removed from the plan.")
+                    if st.toggle("Move to another day", key=f"pl_move_{wid}"):
+                        with st.container(horizontal=True, gap="small"):
+                            new_day = st.date_input("New day", value=day, format="DD/MM/YYYY",
+                                                    key=f"pl_newday_{wid}", label_visibility="collapsed")
+                            if st.button("Move", key=f"pl_moveok_{wid}"):
+                                _act(lambda: db.move_workout(wid, new_day, status), "Moved.")
+
+    with st.expander("Add a one-off session", icon=":material/add:"):
         with st.form("plan_add", clear_on_submit=True):
             c1, c2 = st.columns(2)
             with c1:
@@ -511,37 +670,9 @@ def _plan(data: dict) -> None:
                                              "duration_min": minutes, "notes": notes}, [], []),
                      "Added to your plan.")
 
-    for offset in range(7):
-        day = monday + timedelta(days=offset)
-        items = [w for w in workouts if parse_date(w.get("workout_date")) == day]
-        heading = f"{day:%a} {day.day} {day:%b}" + ("  ·  today" if day == TODAY else "")
-        st.markdown(f"**{heading}**")
-        if not items:
-            st.caption("Nothing planned · rest or free day")
-            continue
-        for w in items:
-            wid = w["id"]
-            status = w.get("status")
-            text = _kind(w) + (f" · {w['duration_min']} min" if w.get("duration_min") else "")
-            if w.get("notes"):
-                text += f" · {w['notes']}"
-            badge = {"completed": ui.badge("Done", "sage"), "skipped": ui.badge("Skipped"),
-                     "planned": ui.badge("Planned", "teal")}.get(status, "")
-            st.markdown(f"{badge} {html.escape(text)}", unsafe_allow_html=True)
-            if status == "planned":
-                with st.container(horizontal=True, gap="small"):
-                    if day <= TODAY and st.button("Done", key=f"pl_done_{wid}", type="primary"):
-                        _act(lambda: db.set_workout_status(wid, "completed", day), "Marked as done.")
-                    if st.button("Skip", key=f"pl_skip_{wid}"):
-                        _act(lambda: db.set_workout_status(wid, "skipped"), "Marked as skipped.")
-                    if st.button("Remove", key=f"pl_del_{wid}"):
-                        _act(lambda: db.delete_workout(wid), "Removed from the plan.")
-                if st.toggle("Move to another day", key=f"pl_move_{wid}"):
-                    with st.container(horizontal=True, gap="small"):
-                        new_day = st.date_input("New day", value=day, format="DD/MM/YYYY",
-                                                key=f"pl_newday_{wid}", label_visibility="collapsed")
-                        if st.button("Move", key=f"pl_moveok_{wid}"):
-                            _act(lambda: db.move_workout(wid, new_day, status), "Moved.")
+    if template:
+        with st.expander("Change my weekly plan", icon=":material/edit_calendar:"):
+            _template_editor(template, data, first_time=False)
 
 
 # --------------------------------------------------------------------- main

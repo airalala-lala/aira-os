@@ -371,3 +371,156 @@ def to_date(value) -> date | None:
     if isinstance(value, date):
         return value
     return parse_date(value)
+
+
+# ------------------------------------------------------------ weekly plan
+#
+# A weekly template says which session happens on which weekday. Each week,
+# the sessions from today onward are added to the plan automatically, so you
+# only need to tick them off. Loads come from your most recent recorded set of
+# the same exercise; nothing is invented. These are suggestions you can change.
+
+WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+
+SESSION_TYPES = {
+    "strength_a": {
+        "label": "Strength A", "kind": "strength", "minutes": 50,
+        "exercises": [
+            {"name": "Precor leg press", "sets": 3, "reps": 10},
+            {"name": "Lat pulldown", "sets": 3, "reps": 10},
+            {"name": "Chest press machine", "sets": 3, "reps": 10},
+            {"name": "Seated cable row", "sets": 3, "reps": 10},
+            {"name": "Back extension", "sets": 3, "reps": 12},
+        ],
+        "cardio": [{"activity": "Rowing (warm-up)", "minutes": 5}],
+    },
+    "strength_b": {
+        "label": "Strength B", "kind": "strength", "minutes": 50,
+        "exercises": [
+            {"name": "Goblet squat", "sets": 3, "reps": 12},
+            {"name": "Romanian deadlift", "sets": 3, "reps": 10},
+            {"name": "Dumbbell shoulder press", "sets": 3, "reps": 10},
+            {"name": "Lat pulldown", "sets": 3, "reps": 10},
+            {"name": "Back extension", "sets": 3, "reps": 12},
+        ],
+        "cardio": [{"activity": "Rowing (finisher)", "minutes": 10}],
+    },
+    "rowing": {"label": "Rowing", "kind": "rowing", "minutes": 25, "exercises": [],
+               "cardio": [{"activity": "Rowing", "minutes": 20}]},
+    "swimming": {"label": "Swimming (breaststroke)", "kind": "swimming", "minutes": 30, "exercises": [],
+                 "cardio": [{"activity": "Swimming (breaststroke)", "minutes": 30}]},
+    "recovery": {"label": "Recovery walk or stretch", "kind": "recovery", "minutes": 20, "exercises": [],
+                 "cardio": []},
+}
+SESSION_KEYS = list(SESSION_TYPES)
+
+# Which weekdays (0 = Monday) and sessions to suggest for each weekly target.
+_SUGGESTED = {
+    1: [(0, "strength_a")],
+    2: [(0, "strength_a"), (3, "swimming")],
+    3: [(0, "strength_a"), (2, "swimming"), (4, "strength_b")],
+    4: [(0, "strength_a"), (2, "swimming"), (4, "strength_b"), (6, "rowing")],
+    5: [(0, "strength_a"), (1, "rowing"), (2, "swimming"), (4, "strength_b"), (6, "rowing")],
+    6: [(0, "strength_a"), (1, "rowing"), (2, "swimming"), (3, "recovery"), (4, "strength_b"), (6, "rowing")],
+}
+
+
+def suggested_template(target) -> dict:
+    """A starting weekly plan for a target number of workouts (3 if none is set)."""
+    n = int(target) if isinstance(target, (int, float)) and target >= 1 else 3
+    days = _SUGGESTED[min(n, 6)]
+    return {
+        "days": [{"weekday": d, "session": s, "minutes": SESSION_TYPES[s]["minutes"]} for d, s in days],
+        "sessions": {k: {"exercises": [dict(e) for e in v["exercises"]],
+                         "cardio": [dict(c) for c in v["cardio"]]}
+                     for k, v in SESSION_TYPES.items()},
+    }
+
+
+def latest_loads(sets: list[dict], workouts: list[dict]) -> dict:
+    """Most recent recorded load for each exercise name (completed sessions only).
+    Within that session, the heaviest set is used."""
+    dates = _workout_dates(workouts)
+    latest: dict[str, dict] = {}
+    for s in sets:
+        day = dates.get(s.get("workout_id"))
+        if day is None or (s.get("load_value") is None and not s.get("load_text")):
+            continue
+        name = s["exercise_name"]
+        current = latest.get(name)
+        value = float(s["load_value"]) if s.get("load_value") is not None else -1
+        if current is None or day > current["date"] or (day == current["date"] and value > current["value"]):
+            latest[name] = {"date": day, "value": value, "load_value": s.get("load_value"),
+                            "load_unit": s.get("load_unit"), "load_basis": s.get("load_basis"),
+                            "load_text": s.get("load_text")}
+    return latest
+
+
+def session_details(session_key: str, template: dict, latest: dict) -> tuple[list[dict], list[dict]]:
+    """Planned sets and cardio for one session, using your last recorded loads."""
+    spec = (template.get("sessions") or {}).get(session_key) or SESSION_TYPES.get(session_key, {})
+    sets, position = [], 0
+    for item in spec.get("exercises") or []:
+        name = (item.get("name") or "").strip()
+        if not name:
+            continue
+        position += 1
+        last = latest.get(name)
+        note = None
+        if last and last.get("load_value") is None and last.get("load_text"):
+            note = f"Last time: {last['load_text']}"
+        elif not last:
+            note = "No load recorded yet"
+        for number in range(1, int(item.get("sets") or 1) + 1):
+            sets.append({
+                "position": position, "exercise_name": name, "set_number": number,
+                "reps": int(item["reps"]) if item.get("reps") else None,
+                "load_value": last.get("load_value") if last else None,
+                "load_unit": last.get("load_unit") if last and last.get("load_value") is not None else None,
+                "load_basis": last.get("load_basis") if last and last.get("load_value") is not None else None,
+                "rpe": None,
+                "notes": note if number == 1 else None,
+            })
+    cardio = [{
+        "position": i, "activity": c["activity"], "distance_m": None,
+        "duration_seconds": int(c["minutes"] * 60) if c.get("minutes") else None,
+        "duration_approximate": False, "settings_text": None, "notes": None,
+    } for i, c in enumerate(spec.get("cardio") or [], start=1)]
+    return sets, cardio
+
+
+def plan_key(monday: date, weekday: int) -> str:
+    return f"plan:{monday.isoformat()}:{weekday}"
+
+
+def sessions_to_add(template: dict, monday: date, today: date, workouts: list[dict]) -> list[dict]:
+    """Template sessions for the week starting 'monday' that still need adding:
+    only today or later, and never on a day that already has a workout from the plan."""
+    existing_keys = {w.get("import_key") for w in workouts if w.get("import_key")}
+    result = []
+    for day in template.get("days") or []:
+        weekday = int(day["weekday"])
+        when = monday + timedelta(days=weekday)
+        if when < today or day.get("session") not in SESSION_TYPES:
+            continue
+        key = plan_key(monday, weekday)
+        if key in existing_keys:
+            continue
+        result.append({"date": when, "weekday": weekday, "session": day["session"],
+                       "minutes": day.get("minutes"), "key": key})
+    return result
+
+
+def prescription(sets: list[dict]) -> list[str]:
+    """'Lat pulldown: 32 kg · 3 × 10' lines for planned sets."""
+    grouped: dict[str, list] = {}
+    for s in sorted(sets, key=lambda x: (x.get("position") or 0, x.get("set_number") or 0)):
+        grouped.setdefault(s["exercise_name"], []).append(s)
+    lines = []
+    for name, items in grouped.items():
+        reps = {s.get("reps") for s in items}
+        rep_text = f"{len(items)} × {items[0]['reps']}" if len(reps) == 1 and items[0].get("reps") else \
+            " / ".join(str(s.get("reps") or "?") for s in items)
+        load = load_label(items[0]) if items[0].get("load_value") is not None else (items[0].get("notes") or "no load recorded yet")
+        lines.append(f"{name}: {load} · {rep_text}")
+    return lines

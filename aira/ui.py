@@ -68,6 +68,10 @@ _CSS = """
 [data-testid="stBaseButton-primary"]:hover,
 [data-testid="stBaseButton-primaryFormSubmit"]:hover { filter: brightness(1.08); }
 
+/* Tabs and choices in sage as well */
+button[data-baseweb="tab"][aria-selected="true"] p { color: var(--aira-button) !important; }
+[data-baseweb="tab-highlight"] { background-color: var(--aira-button) !important; }
+
 /* Headings */
 .aira-eyebrow {
     font-size: 0.74rem; letter-spacing: 0.14em; text-transform: uppercase;

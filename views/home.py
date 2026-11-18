@@ -58,9 +58,19 @@ def _sources_read(since):
         return []
 
 
+def _fill_plan(today) -> None:
+    """Add this week's sessions from the weekly training plan, if one is saved."""
+    try:
+        if db.get_plan_template():
+            db.fill_week_from_template(today - timedelta(days=today.weekday()))
+    except db.DataError:
+        pass  # the Fitness Studio shows any problem; Home stays usable
+
+
 def _load() -> dict:
     today = today_kl()
     since = today - timedelta(days=60)
+    _fill_plan(today)
     try:
         return {
             "today": today,
@@ -257,8 +267,10 @@ def _focus_today(data: dict, picks: list[dict]) -> None:
                 ui.slot("Movement", f"Done today: {kinds}", "Recorded by you.")
             elif planned:
                 workout = planned[0]
-                ui.slot("Movement", "Planned: " + db.WORKOUT_KIND_LABELS.get(workout.get("kind"), "Workout"),
-                        "Mark it done when finished.")
+                name = (workout.get("notes") or "").replace(" · from your weekly plan", "") \
+                    or db.WORKOUT_KIND_LABELS.get(workout.get("kind"), "Workout")
+                ui.slot("Movement", "Planned: " + name,
+                        "Mark it done when finished. Details are in the Fitness Studio plan.")
                 if st.button("Mark done", key=f"wo_done_{workout['id']}", type="primary"):
                     _act(lambda: db.set_workout_status(workout["id"], "completed"), "Workout recorded.")
             else:
