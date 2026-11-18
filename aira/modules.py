@@ -92,14 +92,11 @@ MODULES = [
         "icon": ":material/videocam:",
         "path": "views/creator.py",
         "phase": "Phase 7",
-        "built": False,
-        "summary": "Bio with Teacher Aira: idea bank, scripts, production "
-        "status and a content calendar.",
+        "built": True,
+        "summary": "Bio with Teacher Aira: quick links to your content tracker "
+        "and launch plan.",
         "planned": [
-            "Video idea bank and script drafts",
-            "Recording, editing and publishing status",
-            "Content calendar",
-            "Performance numbers you enter yourself",
+            "TikTok clips cut from your YouTube videos",
         ],
     },
 ]

@@ -179,7 +179,8 @@ Both devices read the same database, so there is nothing to synchronise. A recor
 | **PhD Research Hub** (Phase 2a) | Overview (counts, research phases); Literature (search, filters, table, source detail with evidence kept apart from my thinking); Supervision (feedback checklist, meetings, action items); Timeline (milestones, chart, semester dates) | Add, edit, delete and import sources; mark read today; record meetings and action items; set planned and actual milestone dates |
 | **Fitness Studio** (Phase 3) | Overview (this week, last workout, last recorded weight, consistency); Log (session and set tables, repeat, past workouts); Progress (chart, history, personal bests, rowing, swimming); Weight (chart, entries, goal); Plan (this or next week, day by day) | Log, edit and delete workouts and sets; add, edit and delete measurements; plan, move, skip and complete sessions |
 | **Global Opportunities** (Phase 6) | Closing-soon warning; four tabs of cards with days left, place and dates, fit, next step, official link and checked-on date | Change status with one tap; add, edit and delete |
-| **Other three module pages** | "Not built yet" with the planned features | Nothing yet |
+| **Creator Lab** (Phase 7) | Two cards that open the Bio with Teacher Aira Content Tracker (a Claude sheet) and Launch Plan (a Claude doc); the links are stored in `module_settings` (`creator / tracker_url`, `creator / launch_plan_url`), not in the code | Add or change the links |
+| **Other two module pages** | "Not built yet" with the planned features | Nothing yet |
 
 Navigation: sidebar on desktop; on a phone, the same menu plus a bottom bar (Home, PhD, Fitness, Business, Review).
 

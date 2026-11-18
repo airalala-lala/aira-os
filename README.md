@@ -279,6 +279,16 @@ Upload the whole project to GitHub again, the same way as before, and wait about
 | 5 | In **Applied**, tap **Accepted** or **Not successful** when you hear back | It moves to Past |
 | 6 | **Add an opportunity** with a deadline but no source link | "Please add the link where you found the deadline" |
 
+## Part I: Creator Lab (Phase 7)
+
+No database change this time. Upload the new project to GitHub as before, then:
+
+1. Open **Creator Lab** in AIRA OS.
+2. Open **Add or change the links**, paste your Content Tracker link and your Launch Plan link, and click **Save links**.
+3. Two buttons appear: **Open Content Tracker** and **Open Launch Plan**.
+
+The links are saved in your private database, not in the code on GitHub.
+
 ### Add it to your iPhone Home Screen
 
 In Safari, open the app, tap the **Share** button, then **Add to Home Screen**. It then opens like an app. Let Safari save your password so signing in is one tap.
