@@ -1,0 +1,26 @@
+# AIRA OS - look and feel. This file contains no secrets and is safe on GitHub.
+# The app follows your device's light or dark setting.
+
+[theme]
+font = "sans serif"
+baseRadius = "medium"
+
+[theme.light]
+primaryColor = "#55735C"
+backgroundColor = "#FBF8F1"
+secondaryBackgroundColor = "#F3EEE3"
+textColor = "#2C2A26"
+borderColor = "#E6DFD0"
+
+[theme.dark]
+primaryColor = "#6E8F76"
+backgroundColor = "#1D1F1C"
+secondaryBackgroundColor = "#252824"
+textColor = "#ECE8DF"
+borderColor = "#3A3E38"
+
+[client]
+toolbarMode = "minimal"
+
+[browser]
+gatherUsageStats = false
