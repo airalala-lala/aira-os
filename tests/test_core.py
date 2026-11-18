@@ -10,7 +10,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from aira import fitness, importer, literature, opportunities, planning, timeutil  # noqa: E402
+from aira import fitness, importer, literature, opportunities, planning, timeutil, video_refs  # noqa: E402
 
 TODAY = date(2026, 11, 17)  # a Tuesday
 
@@ -365,6 +365,72 @@ class OpportunityTests(unittest.TestCase):
         csv = b"title,deadline,deadline_source_url\nWith source,2027-01-31,https://example.org\nNo source,2027-01-31,\n"
         rows, problems = importer.parse_files({"opportunities.csv": csv}, date(2026, 11, 18))
         self.assertEqual((len(rows["opportunities"]), len(problems)), (1, 1))
+
+
+
+class VideoReferenceTests(unittest.TestCase):
+    def test_platform_detection(self):
+        cases = {
+            "https://www.tiktok.com/@a/video/123": "tiktok", "https://vt.tiktok.com/ZS123/": "tiktok",
+            "https://www.instagram.com/reel/Cx1/": "instagram", "https://youtu.be/abc": "youtube",
+            "https://www.youtube.com/shorts/abc": "youtube", "https://x.com/a/status/1": "x",
+            "https://vimeo.com/1": "vimeo", "https://example.com/v": "other",
+            "https://notyoutube.com/x": "other",
+        }
+        for url, platform in cases.items():
+            self.assertEqual(video_refs.detect_platform(url), platform, url)
+
+    def test_same_video_gets_same_key(self):
+        k = video_refs.url_key
+        self.assertEqual(k("https://youtu.be/abc?si=xyz"), k("https://www.youtube.com/shorts/abc"))
+        self.assertEqual(k("https://www.youtube.com/watch?v=abc&t=10"), "youtube:abc")
+        self.assertEqual(k("https://www.instagram.com/reel/Cx1/?igsh=123"), k("https://instagram.com/reel/Cx1"))
+        self.assertEqual(k("https://www.tiktok.com/@a/video/1?is_from_webapp=1&_r=1"), k("https://www.tiktok.com/@a/video/1"))
+
+    def test_clean_url(self):
+        self.assertEqual(video_refs.clean_url("  tiktok.com/@a/video/1 "), "https://tiktok.com/@a/video/1")
+        self.assertFalse(video_refs.is_valid_url(video_refs.clean_url("hello")))
+
+    def test_metadata_from_oembed(self):
+        def fetch(url, **kw):
+            self.assertIn("youtube.com/oembed", url)
+            return b'{"title":"Cell division in 60s","author_name":"Bio Channel","thumbnail_url":"https://i.ytimg.com/x.jpg"}', "application/json"
+        meta = video_refs.fetch_metadata("https://youtu.be/abc", fetch)
+        self.assertEqual((meta["status"], meta["title"], meta["creator"], meta["source"]),
+                         ("retrieved", "Cell division in 60s", "Bio Channel", "YouTube oEmbed"))
+
+    def test_failure_keeps_link_only(self):
+        def fetch(url, **kw):
+            raise OSError("offline")
+        meta = video_refs.fetch_metadata("https://www.tiktok.com/@a/video/1", fetch)
+        self.assertEqual((meta["status"], meta["title"]), ("not_available", None))
+
+    def test_instagram_is_not_scraped(self):
+        calls = []
+        meta = video_refs.fetch_metadata("https://www.instagram.com/reel/Cx1/", lambda u, **k: calls.append(u))
+        self.assertEqual((meta["status"], calls), ("not_available", []))
+
+    def test_open_graph_fallback(self):
+        page = b'<meta property="og:title" content="Osmosis &amp; you"><meta content="https://img/x.png" property="og:image">'
+        meta = video_refs.fetch_metadata("https://example.com/v", lambda u, **k: (page, "text/html"))
+        self.assertEqual((meta["title"], meta["thumbnail_url"]), ("Osmosis & you", "https://img/x.png"))
+
+    def test_brief_uses_only_recorded_fields(self):
+        refs = [
+            {"title": "A", "platform": "tiktok", "hook": "Starts with a wrong answer", "analysis_basis": "watched_by_me"},
+            {"title": "B", "platform": "instagram", "analysis_basis": "not_analysed"},
+        ]
+        brief = video_refs.build_brief(refs, "Osmosis", "Form 4", "60 seconds")
+        self.assertIn("Hook and opening style: Starts with a wrong answer", brief)
+        self.assertIn("Nothing recorded about this reference beyond its link", brief)
+        self.assertNotIn("Editing", brief)
+
+    def test_analysis_json_is_parsed(self):
+        text = 'Here: {"hook":"Question first","editing":"Jump cuts"}'
+        draft = video_refs.parse_analysis_json(text)
+        self.assertEqual((draft["hook"], draft["editing"], draft["visuals"]), ("Question first", "Jump cuts", ""))
+        with self.assertRaises(ValueError):
+            video_refs.parse_analysis_json("no json")
 
 
 if __name__ == "__main__":

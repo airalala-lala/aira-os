@@ -73,6 +73,11 @@ def check_key_is_safe(key: str) -> None:
         )
 
 
+def optional_setting(name: str) -> str:
+    """A setting that may be left out (for example ANTHROPIC_API_KEY). Empty if not set."""
+    return _read(name)
+
+
 def load_settings() -> Settings:
     url = _read("SUPABASE_URL").rstrip("/")
     # SUPABASE_ANON_KEY is accepted as a fallback name for older projects.

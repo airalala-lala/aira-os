@@ -93,8 +93,8 @@ MODULES = [
         "path": "views/creator.py",
         "phase": "Phase 7",
         "built": True,
-        "summary": "Bio with Teacher Aira: quick links to your content tracker "
-        "and launch plan.",
+        "summary": "Bio with Teacher Aira: your content tracker and launch plan, "
+        "and the Video Inspiration Library.",
         "planned": [
             "TikTok clips cut from your YouTube videos",
         ],

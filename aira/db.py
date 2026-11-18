@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from datetime import date, timedelta
 
-from aira import fitness, literature, opportunities
+from aira import fitness, literature, opportunities, video_refs
 from aira.planning import AREAS, PRIORITIES, TIME_CATEGORIES
 from aira.supabase_client import get_client
 from aira.timeutil import parse_date, today_kl, utc_now_iso
@@ -794,6 +794,152 @@ def delete_opportunity(opp_id: str) -> None:
     _run(get_client().table("opportunities").delete().eq("id", opp_id))
 
 
+# ------------------------------------------------------------ video library
+
+BUCKET = "attachments"
+REF_TEXT_FIELDS = ["title", "creator", "tags", "my_notes", "transcript", "description"] + \
+    [field for field, _ in video_refs.ANALYSIS_FIELDS]
+
+
+def list_video_refs() -> list[dict]:
+    rows = _run(get_client().table("video_references").select("*"))
+    return sorted(rows, key=lambda r: r.get("created_at") or "", reverse=True)
+
+
+def find_video_ref(key: str) -> dict | None:
+    rows = _run(get_client().table("video_references").select("*").eq("url_key", key).limit(1))
+    return rows[0] if rows else None
+
+
+def save_video_ref(url: str, notes: str, tags: str, metadata: dict) -> dict:
+    """Save a link. The link is kept even when no details were retrieved."""
+    url = video_refs.clean_url(url)
+    if not video_refs.is_valid_url(url):
+        raise DataError("That does not look like a web link. Copy the video's share link and paste it again.")
+    key = video_refs.url_key(url)
+    existing = find_video_ref(key)
+    if existing:
+        raise DataError(f"You already saved this video: \"{existing.get('title') or existing['url']}\".")
+    retrieved = metadata.get("status") == "retrieved"
+    payload = {
+        "url": url, "url_key": key, "platform": video_refs.detect_platform(url),
+        "title": metadata.get("title"), "creator": metadata.get("creator"),
+        "thumbnail_url": metadata.get("thumbnail_url"),
+        "metadata_status": "retrieved" if retrieved else "not_available",
+        "metadata_source": metadata.get("source") if retrieved else None,
+        "metadata_retrieved_at": utc_now_iso() if retrieved else None,
+        "my_notes": (notes or "").strip() or None, "tags": (tags or "").strip() or None,
+    }
+    created = _run(get_client().table("video_references").insert(payload))
+    return created[0] if created else payload
+
+
+def update_video_ref(ref_id: str, fields: dict, details_changed: bool = False) -> None:
+    payload = {}
+    for name in REF_TEXT_FIELDS:
+        if name in fields:
+            value = fields[name]
+            payload[name] = (str(value).strip() or None) if value is not None else None
+    if "analysis_basis" in fields:
+        if fields["analysis_basis"] not in video_refs.ANALYSIS_BASIS:
+            raise DataError("Unknown analysis basis.")
+        payload["analysis_basis"] = fields["analysis_basis"]
+    if "platform" in fields:
+        if fields["platform"] not in video_refs.PLATFORMS:
+            raise DataError("Unknown platform.")
+        payload["platform"] = fields["platform"]
+    if details_changed:
+        payload["metadata_status"] = "edited"
+    for key in ("thumbnail_path", "thumbnail_url", "screenshot_paths"):
+        if key in fields:
+            payload[key] = fields[key]
+    _run(get_client().table("video_references").update(payload).eq("id", ref_id))
+
+
+def apply_retrieved_metadata(ref_id: str, meta: dict) -> None:
+    """Store details that were retrieved automatically, with their source and time."""
+    _run(get_client().table("video_references").update({
+        "title": meta.get("title"), "creator": meta.get("creator"), "thumbnail_url": meta.get("thumbnail_url"),
+        "metadata_status": "retrieved", "metadata_source": meta.get("source"),
+        "metadata_retrieved_at": utc_now_iso(),
+    }).eq("id", ref_id))
+
+
+def delete_video_ref(ref: dict) -> None:
+    paths = [p for p in [ref.get("thumbnail_path"), *(ref.get("screenshot_paths") or [])] if p]
+    if paths:
+        try:
+            get_client().storage.from_(BUCKET).remove(paths)
+        except Exception:
+            pass  # the record still goes; a leftover file is harmless and private
+    _run(get_client().table("video_references").delete().eq("id", ref["id"]))
+
+
+def upload_file(user_id: str, ref_id: str, name: str, data: bytes, content_type: str) -> str:
+    """Store a file privately in your own storage folder. Returns its path."""
+    safe = "".join(c if c.isalnum() or c in ".-_" else "_" for c in name)[-80:] or "file"
+    path = f"{user_id}/video-refs/{ref_id}/{utc_now_iso().replace(':', '').replace('.', '')}_{safe}"
+    try:
+        get_client().storage.from_(BUCKET).upload(path, data, {"content-type": content_type, "upsert": "false"})
+    except Exception as exc:
+        raise DataError(
+            "The file could not be stored. Check that migration 0002 (storage) was run. "
+            f"(Technical detail: {type(exc).__name__})"
+        ) from exc
+    return path
+
+
+def remove_file(path: str) -> None:
+    try:
+        get_client().storage.from_(BUCKET).remove([path])
+    except Exception as exc:
+        raise DataError(f"The file could not be removed. (Technical detail: {type(exc).__name__})") from exc
+
+
+def signed_url(path: str, seconds: int = 3600) -> str | None:
+    """A temporary private link to a stored file, or None."""
+    try:
+        result = get_client().storage.from_(BUCKET).create_signed_url(path, seconds)
+    except Exception:
+        return None
+    if isinstance(result, dict):
+        return result.get("signedURL") or result.get("signedUrl") or result.get("signed_url")
+    return getattr(result, "signed_url", None) or getattr(result, "signedURL", None)
+
+
+def list_concepts() -> list[dict]:
+    rows = _run(get_client().table("video_concepts").select("*"))
+    return sorted(rows, key=lambda r: r.get("created_at") or "", reverse=True)
+
+
+def save_concept(title: str, topic: str, level: str, reference_ids: list[str], brief: str,
+                 body: str, source: str) -> None:
+    title = (title or "").strip()
+    if not title:
+        raise DataError("Please give the video plan a title.")
+    if not (body or "").strip():
+        raise DataError("The plan is empty. Generate it, or paste Claude's answer first.")
+    if source not in ("claude_api", "pasted", "written"):
+        raise DataError("Unknown source.")
+    _run(get_client().table("video_concepts").insert({
+        "title": title[:300], "topic": (topic or "").strip() or None, "form_level": level,
+        "reference_ids": reference_ids, "brief": brief, "body": body.strip(), "source": source,
+    }))
+
+
+def update_concept(concept_id: str, title: str, body: str, status: str) -> None:
+    if status not in ("draft", "approved", "in_tracker"):
+        raise DataError("Unknown status.")
+    if not (title or "").strip():
+        raise DataError("Please give the video plan a title.")
+    _run(get_client().table("video_concepts").update(
+        {"title": title.strip()[:300], "body": (body or "").strip(), "status": status}).eq("id", concept_id))
+
+
+def delete_concept(concept_id: str) -> None:
+    _run(get_client().table("video_concepts").delete().eq("id", concept_id))
+
+
 # ------------------------------------------------------------------ import
 
 HISTORY_TABLES = [
@@ -839,7 +985,7 @@ def export_everything() -> dict:
         "profiles": _run(get_client().table("profiles").select("*")),
         "tasks": _run(get_client().table("tasks").select("*")),
     }
-    for table in HISTORY_TABLES + ["time_entries"]:
+    for table in HISTORY_TABLES + ["time_entries", "video_references", "video_concepts"]:
         try:
             backup[table] = _run(get_client().table(table).select("*"))
         except DataError:

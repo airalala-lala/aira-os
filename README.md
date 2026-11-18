@@ -38,7 +38,7 @@ Use a brand-new project for AIRA OS. Do not reuse a project that holds anything 
 
 ### A2. Create the database tables
 
-There are seven SQL files in the `supabase/migrations` folder. Run them **in number order**, one at a time.
+There are eight SQL files in the `supabase/migrations` folder. Run them **in number order**, one at a time.
 
 1. In the left sidebar, click **SQL Editor**.
 2. Click **New query** (or the **+** button).
@@ -53,6 +53,7 @@ There are seven SQL files in the `supabase/migrations` folder. Run them **in num
    - `0005_phd_hub.sql`
    - `0006_fitness_studio.sql`
    - `0007_global_opportunities.sql`
+   - `0008_video_library.sql`
 
 Every file is safe to run more than once. If you ever re-run an older file, run the later ones again afterwards too, in order.
 
@@ -289,6 +290,42 @@ No database change this time. Upload the new project to GitHub as before, then:
 
 The links are saved in your private database, not in the code on GitHub.
 
+## Part J: Video Inspiration Library
+
+### J1. Update the database
+
+In Supabase, open **SQL Editor**, then **New query**. Paste the contents of `supabase/migrations/0008_video_library.sql` and click **Run**. You should see **Success. No rows returned**. (Thumbnails and screenshots use the private storage from `0002_storage.sql`, which you ran at the start.)
+
+### J2. Update the app
+
+Upload the whole project to GitHub again, the same way as before. Wait about two minutes, then reboot the app (**Manage app → ⋮ → Reboot app**) so the new code loads.
+
+### J3. Optional: let Claude draft video plans inside the app
+
+Without this, the app gives you a brief to copy into a Claude chat, and you paste the answer back. That works on any plan.
+
+To have the app ask Claude directly:
+
+1. Go to [console.anthropic.com](https://console.anthropic.com), sign in, and create an API key. Anthropic charges for usage, separately from your Claude subscription.
+2. In Streamlit, open your app's **Settings → Secrets** and add this line under the others, with your key inside the quote marks:
+   ```toml
+   ANTHROPIC_API_KEY = "sk-ant-..."
+   ```
+3. Click **Save**. The key stays on the server; it is never shown in your browser or put on GitHub.
+
+### J4. Test it
+
+| # | Do this | You should see |
+|---|---|---|
+| 1 | Open **Creator Lab** → **Video Inspiration Library** tab → **Save**, paste a TikTok or YouTube Shorts link, add a note, **Save** | "Saved. Details from TikTok oEmbed." The card in **Gallery** shows the thumbnail, title and creator |
+| 2 | Save an Instagram Reel link | "Only the link was saved". Instagram does not share details without a developer account; add the title yourself under **Details** |
+| 3 | Save the same link again | "You already saved this video" |
+| 4 | **Gallery** → **Details** on a card → fill in **Creative analysis**, choose what it is based on, **Save analysis** | The card shows "Analysed by me" |
+| 5 | Under **Material for analysis**, add a screenshot | It appears there, stored privately |
+| 6 | **Make a video**: choose references, type a Biology topic, **Build the brief** | A brief made only from what you recorded |
+| 7 | Generate with Claude (with a key) or paste Claude's answer (without), then **Save video plan** | It appears in **Video plans**, where you can edit, approve or delete it |
+| 8 | Open the library on your iPhone | The same references and plans |
+
 ### Add it to your iPhone Home Screen
 
 In Safari, open the app, tap the **Share** button, then **Add to Home Screen**. It then opens like an app. Let Safari save your password so signing in is one tap.
@@ -302,8 +339,8 @@ In Safari, open the app, tap the **Share** button, then **Add to Home Screen**. 
 | "AIRA OS is not configured yet. Missing settings: …" | The Secrets box is empty or a name is misspelt | Streamlit app **Settings → Secrets**. Paste the three lines again, check the names exactly, **Save** |
 | "The key you provided is a SECRET / service_role key" | The wrong key was pasted | Replace it with the `sb_publishable_` key. Then in Supabase, delete that secret key and create a new one, since it has been pasted somewhere it should not be |
 | "That email or password is not correct" with the right password | `ALLOWED_EMAIL` does not match the Supabase user's email | Make them identical, including spelling |
-| "A database table is missing" | A migration was not run | Repeat step A2. All seven files are needed, in number order |
-| "The database refused this request (permission denied)" | A migration only partly ran | Run all seven files again in order; it is safe to repeat |
+| "A database table is missing" | A migration was not run | Repeat step A2. All eight files are needed, in number order |
+| "The database refused this request (permission denied)" | A migration only partly ran | Run all eight files again in order; it is safe to repeat |
 | No bar of buttons at the bottom on iPhone | The phone layout needs adjusting | Use the **>** arrow at the top left to open the menu, and send me a screenshot |
 | A timer was left running overnight | You forgot to stop it | The banner asks for the minutes you actually worked, or click **Discard this timer** |
 | "Could not reach the database" or "Could not reach Supabase" | The Supabase project is paused after a quiet week, or there is no internet | Supabase dashboard → your project → **Resume project** |

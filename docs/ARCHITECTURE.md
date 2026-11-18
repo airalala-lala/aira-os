@@ -1,6 +1,6 @@
 # AIRA OS 2.0: architecture and plan
 
-Version 2.3 · updated 18 November 2026 · Phases 1, 2a and 3 deployed; Phase 6 (Global Opportunities) built.
+Version 2.4 · updated 18 November 2026 · Phases 1, 2a, 3 and 6 deployed; Creator Lab links and the Video Inspiration Library built.
 
 **Purpose:** help Aira protect her priorities, regain consistency and make meaningful progress without feeling overwhelmed. The app should make the next good action obvious, take under two minutes a day, and still be useful when it is only opened a few times a week.
 
@@ -13,7 +13,7 @@ Inspected before building: the version 0.2 project (login, a simple task list, b
 | Modules | Five, including a Personal Planner | Six: PhD Research Hub, Fitness Studio, Business & Boundaries, Weekly Life Review, Global Opportunities, Creator Lab. The planner's job moved into the home page and the Weekly Life Review |
 | Home page | Task list and counts | Daily command centre: Top 3, focus today, timer, weekly progress, Restart mode |
 | Look | Light only, teal | Ivory, sage, muted teal, dusty rose and gold; light and dark; bottom bar on phones |
-| Database | Migrations 0001 to 0003 | Adds 0004 (command centre), 0005 (PhD Hub), 0006 (Fitness Studio) and 0007 (Global Opportunities). Earlier files are unchanged, and none changes an existing record |
+| Database | Migrations 0001 to 0003 | Adds 0004 (command centre), 0005 (PhD Hub), 0006 (Fitness Studio) 0007 (Global Opportunities) and 0008 (Video Inspiration Library). Earlier files are unchanged, and none changes an existing record |
 | Tests | None in the project | `tests/test_core.py` |
 
 ## 2. Stack decision
@@ -62,6 +62,9 @@ aira-os/
 │   ├── literature.py           DOI cleaning, duplicate keys, Excel matrix reader
 │   ├── fitness.py              Set cleaning, personal bests, weekly counts, weight average (no database)
 │   ├── opportunities.py        Stages, days left, closing-soon grouping (no database)
+│   ├── video_refs.py           Platform detection, duplicate keys, oEmbed/Open Graph details, the brief
+│   ├── claude_api.py           Optional server-side call to Claude (only with ANTHROPIC_API_KEY)
+│   ├── video_library_ui.py     The Video Inspiration Library screens, shown inside Creator Lab
 │   ├── timeutil.py             Asia/Kuala_Lumpur date and time helpers
 │   ├── modules.py              The six modules and the phone bottom bar
 │   └── ui.py                   Colours, cards, meters, empty states
@@ -72,9 +75,10 @@ aira-os/
 │   ├── phd.py                  PhD Research Hub (Overview, Literature, Supervision, Timeline)
 │   ├── fitness.py              Fitness Studio (Overview, Log, Progress, Weight, Plan)
 │   ├── opportunities.py        Global Opportunities (Closing soon, Applied, Watch list, Past)
-│   └── business.py, review.py, creator.py
+│   ├── creator.py              Creator Lab: tracker and plan links, and the Video Inspiration Library tab
+│   └── business.py, review.py
 ├── supabase/
-│   ├── migrations/             0001 to 0007, run in order, never edited after use
+│   ├── migrations/             0001 to 0008, run in order, never edited after use
 │   └── verify_security.sql     Read-only check of RLS and grants
 ├── tests/test_core.py          Basic tests
 └── docs/ARCHITECTURE.md        This document
@@ -89,7 +93,7 @@ aira-os/
 - Row Level Security on, four "own rows only" policies, access granted to `authenticated` only and nothing to `anon`.
 - `check` lists on status fields; `import_key` with a uniqueness rule on tables that accept imports.
 
-### Built now (migrations 0001 to 0007)
+### Built now (migrations 0001 to 0008)
 
 | Table | Purpose | Key columns |
 |---|---|---|
@@ -107,6 +111,8 @@ aira-os/
 | `strength_sets` | One row per set | `workout_id`, `exercise_name`, `set_number`, `reps`, `load_value`, `load_unit` (kg, lb, machine_units), `load_basis` (total, per_side, per_dumbbell), `load_text` (original wording), `rpe` |
 | `cardio_entries` | Rowing, treadmill, swimming | `workout_id`, `activity`, `distance_m`, `duration_seconds`, `duration_approximate`, `settings_text` |
 | `literature_sources` | Literature review database | `title`, `authors`, `year`, `doi`, `url`, `journal`, `source_type`, `research_country`; source evidence: `methodology`, `theoretical_framework`, `key_findings`, `conclusions`, `limitations`, `abstract`; my thinking: `relevance`, `gap_contribution`, `critical_notes`, `tags`; `reading_status`, `date_read`, `citation`; provenance: `summary_source`, `summary_basis` (full text or abstract only), `pii`, `scopus_eid` |
+| `video_references` | Saved video links | `url`, `url_key` (unique per user), `platform`; retrieved: `title`, `creator`, `thumbnail_url`, `thumbnail_path`, `metadata_status` (retrieved, not_available, edited), `metadata_source`, `metadata_retrieved_at`; mine: `tags`, `my_notes`; analysis: `hook`, `editing`, `visuals`, `storytelling`, `text_style`, `recreate`, `biology_use`, `analysis_basis`; material: `transcript`, `description`, `screenshot_paths` |
+| `video_concepts` | Original video plans | `title`, `topic`, `form_level`, `reference_ids`, `brief`, `body`, `source` (claude_api, pasted, written), `status` (draft, approved, in_tracker) |
 | `supervisor_meetings` | Supervision log | `meeting_date`, `title`, `feedback`, `decisions`, `notes`. Action items are PhD `tasks` with `meeting_id`, so they reach Today's Top 3 |
 
 A running timer is a `time_entries` row whose `minutes` is still empty; the database allows only one at a time. Loads are stored exactly as logged: pounds stay pounds, per-side stays per side, and the machine stays part of the exercise name.
@@ -180,6 +186,7 @@ Both devices read the same database, so there is nothing to synchronise. A recor
 | **Fitness Studio** (Phase 3) | Overview (this week, last workout, last recorded weight, consistency); Log (session and set tables, repeat, past workouts); Progress (chart, history, personal bests, rowing, swimming); Weight (chart, entries, goal); Plan (this or next week, day by day) | Log, edit and delete workouts and sets; add, edit and delete measurements; plan, move, skip and complete sessions |
 | **Global Opportunities** (Phase 6) | Closing-soon warning; four tabs of cards with days left, place and dates, fit, next step, official link and checked-on date | Change status with one tap; add, edit and delete |
 | **Creator Lab** (Phase 7) | Two cards that open the Bio with Teacher Aira Content Tracker (a Claude sheet) and Launch Plan (a Claude doc); the links are stored in `module_settings` (`creator / tracker_url`, `creator / launch_plan_url`), not in the code | Add or change the links |
+| **Creator Lab → Video Inspiration Library tab** | Save (paste link); Gallery (cards with thumbnail, badges for what was retrieved and analysed, search and filters, details panel with analysis, screenshots and transcript); Make a video (choose references, topic, level, length → brief → Claude or paste → save); Video plans | Save, edit, delete references and plans; upload screenshots; draft analysis from a transcript with Claude when a key is set |
 | **Other two module pages** | "Not built yet" with the planned features | Nothing yet |
 
 Navigation: sidebar on desktop; on a phone, the same menu plus a bottom bar (Home, PhD, Fitness, Business, Review).
@@ -248,4 +255,14 @@ Navigation: sidebar on desktop; on a phone, the same menu plus a bottom bar (Hom
 - Without a recorded deadline an opportunity sits on the Watch list and is never shown as urgent.
 - The database refuses a deadline without a `deadline_source_url`.
 - The 13 opportunities in `07_opportunities_2027.json` were researched on 18 November 2026; see the doc "Global Opportunities 2027: deadline plan" for the reasoning and sources. AIRA OS does not search the web by itself.
+
+## 16. Video Inspiration Library rules
+
+- **The link is always saved.** Details are then looked up once: YouTube, TikTok and Vimeo through their public oEmbed services, other sites through the page's Open Graph preview tags. Instagram and Facebook require a developer account for this, so they are saved as link only.
+- **Three labels, never mixed:** the saved link; retrieved details, shown with their source and time (or "edited by me"); and creative analysis, shown with its basis (by me after watching, by me from my materials, or Claude's draft from my transcript or description).
+- **Claude never watches a video.** It can only draft an analysis from a transcript or description you provided, and the draft fills the form for you to check before anything is saved.
+- **Thumbnails are copied** into the private storage bucket when possible, because platform thumbnail links expire. Screenshots are stored in the same private folder (`<user id>/video-refs/<reference id>/`).
+- **Duplicates** are blocked by a cleaned link: tracking parameters are removed, and every YouTube link form (youtu.be, shorts, watch) becomes the video id.
+- **The brief** contains only fields you recorded. The plan prompt asks for original content in Bahasa Melayu with English scientific terms, KSSM accuracy and a fact-check list, and forbids describing anything about a reference that the brief does not say.
+- **Claude inside the app is optional** and uses `ANTHROPIC_API_KEY` from Secrets, on the server only. Without it, the brief and instructions are shown for copying into a Claude chat, and the answer is pasted back and saved as "Pasted from a Claude chat".
 

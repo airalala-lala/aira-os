@@ -7,7 +7,7 @@ The links are saved in your private database, not in the code on GitHub.
 
 import streamlit as st
 
-from aira import db, ui
+from aira import db, ui, video_library_ui
 
 LINKS = [
     ("tracker_url", "Content Tracker", "Progress of every video: idea, scripted, recorded, edited, published.",
@@ -21,6 +21,14 @@ def main() -> None:
     flash = st.session_state.pop("_flash", None)
     if flash:
         st.toast(flash)
+    overview, library = st.tabs(["Tracker and plan", "Video Inspiration Library"])
+    with overview:
+        _links()
+    with library:
+        video_library_ui.render()
+
+
+def _links() -> None:
     try:
         saved = {key: db.get_setting("creator", key) for key, *_ in LINKS}
     except db.DataError as exc:
